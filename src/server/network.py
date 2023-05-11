@@ -7,18 +7,15 @@ class Network:
         self.port = 5555
         self.addr = (self.server, self.port)
         self.json_data = self.connect()
-
-    def get_json_data(self):
-        ...
     
     def connect(self):
         try:
             self.client.connect(self.addr)
-            return json.loads(self.client.recv(2048).decode())
+            return self.client.recv(2048).decode()
         except:
             pass
     
-    def send(self, data: str):
+    def send(self, data: dict[str, str | list[str] | int]):
         try:
             self.client.send(str.encode(json.dumps(data)))
             return json.loads(self.client.recv(2048).decode())

@@ -162,7 +162,6 @@ def get_attacked_squares(board: list[str], occupations: set[int]):
 
     return attacked_squares
 
-
 PIECE_OFFSETS = {
     'p': [[-1, -1], [0, -1], [1, -1]],
     'n': [[-1, -2], [1, -2], [2, -1], [2, 1], [1, 2], [-1, 2], [-2, 1], [-2, -1]],
@@ -209,7 +208,7 @@ class BoardState:
                 self.board.append(char)
                 self.black_occupied.add(square_index)
                 if char == 'k':
-                    self.king_positions[0] = square_index
+                    self.king_positions[1] = square_index
                 square_index += 1
             elif char == '/':
                 continue
@@ -258,9 +257,9 @@ class BoardState:
 
         print(fen_str)
 
-    def make_board_move(self, move: dict[str, int]):
-        old_square = move['from']
-        new_square = move['to']
+    def make_board_move(self, move: list[int, int]):
+        old_square = move[0]
+        new_square = move[1]
         moved_piece = self.board[old_square]
 
         # update occupations
