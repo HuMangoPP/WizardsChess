@@ -1,8 +1,8 @@
 import sys
 
-from src.game import Game
+from src.client.client import Client
 
 if __name__ == '__main__':
-    game = Game()
-    game.run()
+    client = Client()
+    client.run()
     sys.exit()
