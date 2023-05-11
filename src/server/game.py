@@ -1,4 +1,4 @@
-from .server_state import BoardState
+from server_state import BoardState
 
 class Game:
     def __init__(self, id: str):
