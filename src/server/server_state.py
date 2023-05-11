@@ -1,4 +1,29 @@
 
+class FieldEffectsState:
+    def __init__(self):
+        # field effects are kept track of in a master list
+        # the index of each element corresponds to the square number
+        # and each element is a list of strings which is the
+        # effect_id (name)
+        self.effects = []
+        self.on_start()
+    
+    def on_start(self):
+        for i in range(64):
+            self.effects.append([])
+
+    def get_field_effects(self, square: int):
+        return self.effects[square]
+
+    def update_field_effects(self, square: int, new_effects: list[str], func: str='write'):
+        match func:
+            case 'add':
+                [self.effects[square].append(new_effect) for new_effect in new_effects]
+            case 'del':
+                [self.effects[square].remove(new_effect) for new_effect in new_effects]
+            case 'write':
+                self.effects[square] = new_effects
+
 WHITE_PIECES = 'PNBRQK'
 BLACK_PIECES = 'pnbrqk'
 STARTING_FEN_STR = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -1 0 1'
@@ -172,11 +197,13 @@ PIECE_OFFSETS = {
 }
 
 class BoardState:
-    def __init__(self, fen_str: str=STARTING_FEN_STR):
+    def __init__(self, field_effects: FieldEffectsState, fen_str: str=STARTING_FEN_STR):
         self.board : list[str] = []
         self.white_occupied = set()
         self.black_occupied = set()
         self.on_start(fen_str)
+
+        self.field_effects = field_effects
 
         # these might not be need to be stored permanently
         # can be calculated and returned when the player requests
@@ -274,6 +301,10 @@ class BoardState:
             if new_square in self.white_occupied:
                 self.white_occupied.remove(new_square)
         
+        # update field effects for piece
+        self.field_effects.update_field_effects(new_square, self.field_effects.get_field_effects(old_square))
+        self.field_effects.update_field_effects(old_square, [])
+
         # pawn move
         en_passant = self.en_passant
         self.en_passant = -1
@@ -281,8 +312,10 @@ class BoardState:
             if new_square == en_passant: # en passant capture
                 if self.move == 1:
                     self.black_occupied.remove(en_passant + 8)
+                    self.field_effects.update_field_effects(en_passant + 8, [])
                 else:
                     self.white_occupied.remove(en_passant - 8)
+                    self.field_effects.update_field_effects(en_passant - 8, [])
                 self.board[en_passant] = 0
             elif new_square - old_square == 16:
                 self.en_passant = old_square + 8
@@ -301,6 +334,9 @@ class BoardState:
                 else:
                     self.black_occupied.add(new_square - 1)
                     self.black_occupied.remove(new_square + 1)
+                # update the field effect location
+                self.field_effects.update_field_effects(new_square - 1, self.field_effects.get_field_effects(new_square + 1))
+                self.field_effects.update_field_effects(new_square + 1, [])
             elif old_square - new_square == 2: # queenside castle
                 self.board[new_square + 1] = self.board[new_square - 2]
                 self.board[new_square - 2] = 0 
@@ -309,7 +345,9 @@ class BoardState:
                     self.white_occupied.remove(new_square - 2)
                 else:
                     self.black_occupied.add(new_square + 1)
-                    self.black_occupied.remove(new_square - 1)
+                    self.black_occupied.remove(new_square - 2)
+                self.field_effects.update_field_effects(new_square + 1, self.field_effects.get_field_effects(new_square - 2))
+                self.field_effects.update_field_effects(new_square - 2, [])
             # remove castling privileges
             if self.move == 1:
                 self.castling_priv['K'] = False
@@ -371,5 +409,25 @@ class BoardState:
         
         legal_moves = pseudo_legal_moves.difference(illegal_moves)
         return legal_moves
-                
+                 
+class HandState:
+    def __init__(self, field_effects: FieldEffectsState):
+        # each hand is represented by a list of
+        # strings, each of which is a card_id (name)
+        self.white_hand = []
+        self.black_hand = []
+
+        self.field_effects = field_effects
     
+    def make_card_play(self, play: list[str, str, int]):
+        p_side = play[0]
+        card_id = play[1]
+        target = play[2]
+
+        if p_side == 'w':
+            self.white_hand.remove(card_id)
+        else:
+            self.black_hand.remove(card_id)
+        self.field_effects.update_field_effects(target, [card_id], func='add')
+
+
