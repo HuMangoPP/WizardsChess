@@ -215,7 +215,7 @@ class BoardState:
             else:
                 num_empty = int(char)
                 for i in range(num_empty):
-                    self.board.append('')
+                    self.board.append(0)
                 square_index += num_empty
 
     def get_fen_str(self) -> str:
@@ -228,7 +228,7 @@ class BoardState:
                     fen_str += str(empty_counter)
                     empty_counter = 0
                 fen_str += '/'
-            if square == '':
+            if square == 0:
                 empty_counter += 1
             else:
                 if empty_counter > 0:
@@ -255,7 +255,7 @@ class BoardState:
         # half moves and full moves
         fen_str += f'{self.half_moves} {self.full_moves}'
 
-        print(fen_str)
+        return fen_str
 
     def make_board_move(self, move: list[int, int]):
         old_square = move[0]
@@ -283,7 +283,7 @@ class BoardState:
                     self.black_occupied.remove(en_passant + 8)
                 else:
                     self.white_occupied.remove(en_passant - 8)
-                self.board[en_passant] = ''
+                self.board[en_passant] = 0
             elif new_square - old_square == 16:
                 self.en_passant = old_square + 8
             elif old_square - new_square == 16:
@@ -294,7 +294,7 @@ class BoardState:
             self.king_positions[int((1 - self.move) / 2)] = new_square
             if new_square - old_square == 2: # kingside castle
                 self.board[new_square - 1] = self.board[new_square + 1]
-                self.board[new_square + 1] = '' 
+                self.board[new_square + 1] = 0
                 if self.move == 1:
                     self.white_occupied.add(new_square - 1)
                     self.white_occupied.remove(new_square + 1)
@@ -303,7 +303,7 @@ class BoardState:
                     self.black_occupied.remove(new_square + 1)
             elif old_square - new_square == 2: # queenside castle
                 self.board[new_square + 1] = self.board[new_square - 2]
-                self.board[new_square - 2] = '' 
+                self.board[new_square - 2] = 0 
                 if self.move == 1:
                     self.white_occupied.add(new_square + 1)
                     self.white_occupied.remove(new_square - 2)
@@ -330,7 +330,7 @@ class BoardState:
                 self.castling_priv['Q'] = False
         
         self.board[new_square] = moved_piece
-        self.board[old_square] = ''
+        self.board[old_square] = 0
         self.move *= -1
 
     def pickup_piece(self, square: int) -> set[int]:
@@ -344,14 +344,14 @@ class BoardState:
             black_occupied_cp = self.black_occupied.copy()
 
             # check capture and remove occupations
-            if board_cp[pl_move] != '':
+            if board_cp[pl_move] != 0:
                 if self.move == 1:
                     black_occupied_cp.remove(pl_move)
                 else:
                     white_occupied_cp.remove(pl_move)
             # update the board state
             board_cp[pl_move] = piece
-            board_cp[square] = ''
+            board_cp[square] = 0
 
             # en passant capture
             if piece in 'Pp':

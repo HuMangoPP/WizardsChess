@@ -20,30 +20,43 @@ id_count = 0
 
 def threaded_client(conn: socket.socket, p: str, game_id: int):
     global id_count 
-    conn.send(str.encode(p))
+    conn.send(str.encode(json.dumps({
+        'p': p,
+        'game_id': game_id,
+    })))
     
     reply : dict[str, str | list[str]] = {}
     while True:
         try:
             req = json.loads(conn.recv(4096).decode())
-
             if game_id in games:
                 game = games[game_id]
                 
-                if not req:
-                    break
-                else:
+                if req:
                     match req['req_type']:
-                        case 'get':
+                        case 'board':
                             reply = {
                                 'board_state': game.get_board_state(),
+                                'occupy': game.get_occupation(req['p_side'])
                             }
-                        case 'put':
+                        case 'pickup':
+                            legal_moves = game.get_legal_moves(req['square'])
+                            reply = {
+                                'legal_moves': legal_moves
+                            }
+                        case 'move':
                             game.make_move(req['move'])
+                            reply = {}
+                        case 'ready':
                             reply = {
-                                'board_state': game.get_board_state(),
+                                'game_state': game.is_ready()
                             }
-                conn.sendall(json.dumps(reply))
+                        case 'hand':
+                            ...
+                        case 'card':
+                            ...
+                reply = json.dumps(reply)
+                conn.sendall(str.encode(reply))
             else:
                 break
         except:
