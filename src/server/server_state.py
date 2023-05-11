@@ -15,6 +15,9 @@ class FieldEffectsState:
     def get_field_effects(self, square: int):
         return self.effects[square]
 
+    def get_entire_field(self):
+        return self.effects
+
     def update_field_effects(self, square: int, new_effects: list[str], func: str='write'):
         match func:
             case 'add':
@@ -414,8 +417,8 @@ class HandState:
     def __init__(self, field_effects: FieldEffectsState):
         # each hand is represented by a list of
         # strings, each of which is a card_id (name)
-        self.white_hand = []
-        self.black_hand = []
+        self.white_hand = ['avada_kedavra']
+        self.black_hand = ['avada_kedavra']
 
         self.field_effects = field_effects
     
@@ -430,4 +433,14 @@ class HandState:
             self.black_hand.remove(card_id)
         self.field_effects.update_field_effects(target, [card_id], func='add')
 
-
+    def get_hands_data(self, p_side: str) -> dict:
+        if p_side == 'w':
+            return {
+                'p_hand': self.white_hand,
+                'o_hand': len(self.black_hand)
+            }
+        else:
+            return {
+                'p_hand': self.black_hand,
+                'o_hand': len(self.white_hand)
+            }

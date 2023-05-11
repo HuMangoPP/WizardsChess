@@ -37,6 +37,7 @@ def threaded_client(conn: socket.socket, p: str, game_id: int):
                         case 'board':
                             reply = {
                                 'board_state': game.get_board_state(),
+                                'ffx_state': game.get_ffx_state(),
                                 'occupy': game.get_occupation(req['p_side'])
                             }
                         case 'pickup':
@@ -52,9 +53,10 @@ def threaded_client(conn: socket.socket, p: str, game_id: int):
                                 'game_state': game.is_ready()
                             }
                         case 'hand':
-                            ...
-                        case 'card':
-                            ...
+                            reply = game.get_hand_state(req['p_side'])
+                        case 'play_card':
+                            game.play_card(req['card_play'])
+                            reply = {}
                 reply = json.dumps(reply)
                 conn.sendall(str.encode(reply))
             else:
