@@ -1,7 +1,9 @@
 import pygame as pg
 
 from ..util.transitions import transition_in, transition_out, TRANSITION_TIME
-from ..chess.chess import Board
+
+from ..game.battle_manager import BattleManager
+from ..game.chess import Board
 
 DEFAULT_DISPLAY = 'default'
 EFFECTS_DISPLAY = 'gaussian_blur'
@@ -82,7 +84,9 @@ class GameMenu:
         # chess board
         self.white = 'gryffindor_red'
         self.black = 'slytherin_green'
-        self.board = Board(self, fen_str='r3k2r/8/p7/8/p7/p7/PPPPPPPP/R3K2R w KQkq 43 0 1')
+        self.board = Board(self, fen_str='r3k2r/8/p7/8/p7/p7/PPPPPPPP/R3K2R w KQkq -1 0 1')
+
+        # players
         
     def on_transition(self):
         # 0 -> no transition
