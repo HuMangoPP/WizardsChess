@@ -2,7 +2,6 @@ import pygame as pg
 
 WHITE_PIECES = 'PNBRQK'
 BLACK_PIECES = 'pnbrqk'
-SIDE_MAP = {'w': 1, 'b': -1}
 TILESIZE = 64
 
 class Board:
@@ -10,8 +9,8 @@ class Board:
         self.width, self.height = menu.width, menu.height
         self.display : pg.Surface = menu.displays['default']
         self.piece_collection : dict[str, dict[str, pg.Surface]] = menu.piece_collection
-        self.white_palette = menu.white
-        self.black_palette = menu.black
+        self.white_palette = menu.white_theme
+        self.black_palette = menu.black_theme
         self.menu = menu
 
         self.update_board_state(fen_str, occupy)
@@ -93,23 +92,24 @@ class Board:
                 else:
                     self.hovered_square = chunked_x + chunked_y * 8
             if event.type == pg.MOUSEBUTTONDOWN:
-                if self.held_piece:
-                    if self.hovered_square in self.legal_moves:
-                        # send data to server to make a move
+                if self.can_move:
+                    if self.held_piece:
+                        if self.hovered_square in self.legal_moves:
+                            # send data to server to make a move
+                            req = {
+                                'req_type': 'move',
+                                'move': [self.prev_square, self.hovered_square]
+                            }
+                            self.prev_square = -1
+                            self.held_piece = ''
+                    elif self.hovered_square in self.occupied:
+                        # send data to server to retrieve info about legal moves
                         req = {
-                            'req_type': 'move',
-                            'move': [self.prev_square, self.hovered_square]
+                            'req_type': 'pickup',
+                            'square': self.hovered_square
                         }
-                        self.prev_square = -1
-                        self.held_piece = ''
-                elif self.hovered_square in self.occupied:
-                    # send data to server to retrieve info about legal moves
-                    req = {
-                        'req_type': 'pickup',
-                        'square': self.hovered_square
-                    }
-                    self.prev_square = self.hovered_square
-                    self.held_piece = self.board[self.hovered_square]
+                        self.prev_square = self.hovered_square
+                        self.held_piece = self.board[self.hovered_square]
         return req
 
     def render_pieces(self):

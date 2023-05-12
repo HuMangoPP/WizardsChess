@@ -3,6 +3,7 @@ import pygame as pg
 from ..util.transitions import transition_in, transition_out, TRANSITION_TIME
 
 from ..game.chess import Board
+from ..game.cards import Hand, HiddenHand
 
 DEFAULT_DISPLAY = 'default'
 EFFECTS_DISPLAY = 'gaussian_blur'
@@ -150,15 +151,18 @@ class GameMenu:
         self.displays = client.displays
         self.font = client.font
         self.clock = client.clock
-        self.piece_collection = client.piece_collection
         self.client = client
+        
+        # assets
+        self.piece_collection = client.piece_collection
+        self.card_collection = client.card_collection
 
         # transition handler
         self.goto = 'start'
 
         # chess board
-        self.white = 'gryffindor_red'
-        self.black = 'slytherin_green'
+        self.white_theme = 'gryffindor_red'
+        self.black_theme = 'slytherin_green'
     
     def on_load(self):
         self.on_transition()
@@ -172,6 +176,14 @@ class GameMenu:
         }
         res = self.client.n.send(req)
         self.board = Board(self, res['board_state'], res['occupy'])
+
+        req = {
+            'req_type': 'hand',
+            'p_side': self.p_side
+        }
+        res = self.client.n.send(req)
+        self.p_hand = Hand(res['p_hand'], self.card_collection, self.white_theme)
+        self.o_hand = HiddenHand(res['o_hand'], self.card_collection, self.white_theme)
 
     def on_transition(self):
         # 0 -> no transition
@@ -196,7 +208,8 @@ class GameMenu:
             self.board.update_board_state(res['board_state'], res['occupy'])
         except:
             pass
-
+            
+        # board update for getting legal moves and making moves
         req = self.board.update(events)
         if req:
             try:
@@ -205,6 +218,9 @@ class GameMenu:
                     self.board.update_legal_moves(res['legal_moves'])
             except:
                 pass
+
+        # hand update
+        self.p_hand.update(events)
 
         if self.transition_phase > 0:
             self.transition_time += dt
@@ -220,10 +236,16 @@ class GameMenu:
 
     def render(self) -> list[str]:
         self.displays[DEFAULT_DISPLAY].fill((20, 26, 51))
-        self.font.render(self.displays[DEFAULT_DISPLAY], 'Game', self.width/2, 100, 
-                         (255, 255, 255), 50, style='center')
+        if self.board.can_move:
+            self.font.render(self.displays[DEFAULT_DISPLAY], 'your turn', self.width/2, 30, 
+                            (255, 255, 255), 25, style='center')
+        else:
+            self.font.render(self.displays[DEFAULT_DISPLAY], 'opponents turn', self.width/2, 30, 
+                            (255, 255, 255), 25, style='center')
         
         self.board.render()
+        self.p_hand.render(self.displays[DEFAULT_DISPLAY])
+        self.o_hand.render(self.displays[DEFAULT_DISPLAY])
 
         match self.transition_phase:
             case 1: 

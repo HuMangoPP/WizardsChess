@@ -15,23 +15,24 @@ MENU_MAP = {
     'game': 2
 }
 
+COLOR_PALETTES = {
+    'gryffindor_red': (174,0,1),
+    'gryffindor_gold': (238,186,48),
+    'slytherin_silver': (170,170,170),
+    'slytherin_green': (42,98,61),
+    'ravenclaw_blue': (29,42,84),
+    'ravenclaw_silver': (126,126,126),
+    'hufflepuff_yellow': (240,199,94),
+    'hufflepuff_black': (55,46,41)
+}
+
 def get_chess_piece_palettes(chess_pieces: dict[str, pg.Surface]) -> dict[str, dict[str, pg.Surface]]:
-    colors = {
-        'gryffindor_red': (174,0,1),
-        'gryffindor_gold': (238,186,48),
-        'slytherin_silver': (170,170,170),
-        'slytherin_green': (42,98,61),
-        'ravenclaw_blue': (29,42,84),
-        'ravenclaw_silver': (126,126,126),
-        'hufflepuff_yellow': (240,199,94),
-        'hufflepuff_black': (55,46,41)
-    }
     piece_collection = {}
-    for color in colors:
+    for color in COLOR_PALETTES:
         piece_set = {}
         for piece in chess_pieces:
             colored_piece = pg.Surface(chess_pieces[piece].get_size())
-            colored_piece.fill(colors[color])
+            colored_piece.fill(COLOR_PALETTES[color])
             colored_piece.blit(chess_pieces[piece], (0, 0))
             colored_piece.set_colorkey((0, 0, 0))
             piece_set[piece] = colored_piece
@@ -39,11 +40,25 @@ def get_chess_piece_palettes(chess_pieces: dict[str, pg.Surface]) -> dict[str, d
         piece_collection[color] = piece_set
     
     return piece_collection
-            
+
+def get_spell_card_palettes(card_designs: dict[str, pg.Surface]) -> dict[str, dict[str, pg.Surface]]:
+    card_collection = {}
+    for color in COLOR_PALETTES:
+        card_set = {}
+        for card in card_designs:
+            colored_card = pg.Surface(card_designs[card].get_size())
+            colored_card.fill(COLOR_PALETTES[color])
+            colored_card.blit(card_designs[card], (0, 0))
+            card_set[card] = colored_card
+        
+        card_collection[color] = card_set
+    
+    return card_collection
+
 class Client:
     def __init__(self):
         pg.init()
-        self.res = (960, 630)
+        self.res = (960, 1080)
 
         pg.display.set_mode(self.res, pg.OPENGL | pg.DOUBLEBUF)
         self.ctx = mgl.create_context()
@@ -60,7 +75,8 @@ class Client:
         }
         self.clock = pg.time.Clock()
 
-        self.piece_collection = get_chess_piece_palettes( load_sprites(path='./assets/chess_pieces', scale=4, colorkey=(0, 255, 0)) )
+        self.piece_collection = get_chess_piece_palettes(load_sprites(path='./assets/chess_pieces', scale=4, colorkey=(0, 255, 0)))
+        self.card_collection = get_spell_card_palettes(load_sprites(path='./assets/cards', scale=4, colorkey=(0, 0, 0)))
 
         self.menus = [StartMenu(self), WaitingRoom(self), GameMenu(self)]
         self.current_menu = 0

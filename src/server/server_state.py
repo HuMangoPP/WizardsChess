@@ -417,8 +417,8 @@ class HandState:
     def __init__(self, field_effects: FieldEffectsState):
         # each hand is represented by a list of
         # strings, each of which is a card_id (name)
-        self.white_hand = ['avada_kedavra']
-        self.black_hand = ['avada_kedavra']
+        self.white_hand = ['avada_kedavra', 'accio', 'depulso', 'confundus']
+        self.black_hand = ['deprimo', 'reducio', 'expelliarmus', 'disillusionment']
 
         self.field_effects = field_effects
     
