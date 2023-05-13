@@ -1,5 +1,8 @@
 import pygame as pg
+import numpy as np
 import math
+
+from ..vfx.particles import Sparks
 
 class Hand:
     def __init__(self, hand: list[str], card_designs: dict[str, dict[str, pg.Surface]], color_theme: str):
@@ -12,17 +15,19 @@ class Hand:
         self.card_width = card_designs['gryffindor_gold']['border'].get_width()
         self.card_height = card_designs['gryffindor_gold']['border'].get_height()
 
-    def update(self, events: list[pg.Event]):
+    def update(self, events: list[pg.Event], dt: float):
         for event in events:
             if event.type == pg.MOUSEBUTTONDOWN:
                 for i in range(len(self.cards)):
                     card_rect = pg.Rect(0, self.card_height * i, self.card_width, self.card_height)
                     if card_rect.collidepoint(event.pos[0], event.pos[1]):
                         self.cards[i].scroll_card_face()
+            
+        [self.cards[i].update((0, self.card_height * i), dt) for i in range(len(self.cards))]
 
 
-    def render(self, display: pg.Surface):
-        [card.render(display, (0, self.card_height * i)) for i, card in enumerate(self.cards)]
+    def render(self, displays: dict[str, pg.Surface]):
+        [card.render(displays) for card in self.cards]
 # this class will allow me to encapsulate some static functionality that i want for a card
 # this dict maps spell names to a parametric function that determines the wand path
 CARD_EFFECTS = {
@@ -78,7 +83,7 @@ SPELL_COLORS = {
     'fumos': (20, 20, 20),
     'cruciatus': (50, 25, 25),
     'confringo': (40, 30, 20),
-    'impendimenta': (20, 35, 35),
+    'impedimenta': (20, 35, 35),
     'imperius': (30, 30, 30),
     'locomotor': (25, 25, 25),
     'legilimens': (25, 25, 25),
@@ -141,33 +146,58 @@ SPELL_WAND_PATHS = {
 
 def draw_wand_path(card: pg.Surface, path: callable):
     width, height = card.get_size()
+    width -= 10
+    height -= 10
     points = [path(t/20) for t in range(0, 20)]
     for i in range(len(points) - 1):
         pg.draw.line(card, (255, 255, 255), 
                      (width * (points[i][0] + 0.5), height * (points[i][1] + 0.5)),
                      (width * (points[i+1][0] + 0.5), height * (points[i+1][1] + 0.5)), 5)
-    
+
+def trace_wand_path(card_rect: pg.Rect, path: callable, t: float):
+    anchor = path(t)
+    width, height = card_rect.size
+    width -= 10
+    height -= 10
+    return np.array(card_rect.center) + np.array([width * anchor[0], height * anchor[1]])
 
 class Card:
     def __init__(self, card_designs: dict[str, dict[str, pg.Surface]], spell: str, color_theme: str):
         card = card_designs[color_theme]['border'].copy()
         draw_wand_path(card, SPELL_WAND_PATHS[spell])
         text = card_designs[color_theme]['border'].copy()
+        self.draw_rect = card.get_rect()
 
         self.card_faces = [
             card, # i can potentially draw this using vfx procedurally
             text, # this one is drawn
         ]
+        
+        self.spell = spell
+        self.t = 0
+        self.spell_color = SPELL_COLORS[spell]
+        self.sparks = Sparks(self.draw_rect.center, self.spell_color)
         self.current_side_up = 0
 
         # status effects of the card
         self.card_effect = CARD_EFFECTS[spell]
     
+    def update(self, topleft: tuple[int, int], dt: float):
+        self.draw_rect.top = topleft[1]
+        self.draw_rect.left = topleft[0]
+
+        self.t += dt
+        if self.t > 1:
+            self.t -= 1
+        new_anchor = trace_wand_path(self.draw_rect, SPELL_WAND_PATHS[self.spell], self.t)
+        self.sparks.update(dt, new_anchor)
+
     def scroll_card_face(self):
         self.current_side_up = (self.current_side_up + 1) % 2
 
-    def render(self, display: pg.Surface, pos: tuple[int, int]):
-        display.blit(self.card_faces[self.current_side_up], pos)
+    def render(self, displays: dict[str, pg.Surface]):
+        displays['default'].blit(self.card_faces[self.current_side_up], self.draw_rect)
+        self.sparks.render(displays['gaussian_blur'])
 
 class HiddenHand:
     def __init__(self, hand_size: int, card_designs: dict[str, dict[str, pg.Surface]], color_theme: str):

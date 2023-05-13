@@ -58,7 +58,7 @@ def get_spell_card_palettes(card_designs: dict[str, pg.Surface]) -> dict[str, di
 class Client:
     def __init__(self):
         pg.init()
-        self.res = (960, 1080)
+        self.res = (960, 1000)
 
         pg.display.set_mode(self.res, pg.OPENGL | pg.DOUBLEBUF)
         self.ctx = mgl.create_context()

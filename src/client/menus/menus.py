@@ -5,6 +5,8 @@ from ..util.transitions import transition_in, transition_out, TRANSITION_TIME
 from ..game.chess import Board
 from ..game.cards import Hand, HiddenHand
 
+from ..vfx.particles import Sparks
+
 DEFAULT_DISPLAY = 'default'
 EFFECTS_DISPLAY = 'gaussian_blur'
 OVERLAY_DISPLAY = 'black_alpha'
@@ -156,6 +158,7 @@ class GameMenu:
         # assets
         self.piece_collection = client.piece_collection
         self.card_collection = client.card_collection
+        self.cursor = Sparks(pg.mouse.get_pos(), (25, 25, 25))
 
         # transition handler
         self.goto = 'start'
@@ -220,7 +223,9 @@ class GameMenu:
                 pass
 
         # hand update
-        self.p_hand.update(events)
+        self.p_hand.update(events, dt)
+
+        self.cursor.update(dt, pg.mouse.get_pos())
 
         if self.transition_phase > 0:
             self.transition_time += dt
@@ -236,6 +241,7 @@ class GameMenu:
 
     def render(self) -> list[str]:
         self.displays[DEFAULT_DISPLAY].fill((20, 26, 51))
+        self.displays[EFFECTS_DISPLAY].fill((0, 0, 0))
         if self.board.can_move:
             self.font.render(self.displays[DEFAULT_DISPLAY], 'your turn', self.width/2, 30, 
                             (255, 255, 255), 25, style='center')
@@ -244,8 +250,10 @@ class GameMenu:
                             (255, 255, 255), 25, style='center')
         
         self.board.render()
-        self.p_hand.render(self.displays[DEFAULT_DISPLAY])
+        self.p_hand.render(self.displays)
         self.o_hand.render(self.displays[DEFAULT_DISPLAY])
+
+        self.cursor.render(self.displays[EFFECTS_DISPLAY])
 
         match self.transition_phase:
             case 1: 
@@ -255,11 +263,9 @@ class GameMenu:
             case 3:
                 transition_in(self.displays[OVERLAY_DISPLAY], self.transition_time)
         
-        displays_to_render = [DEFAULT_DISPLAY]
-
+        displays_to_render = [DEFAULT_DISPLAY, EFFECTS_DISPLAY]
         if self.transition_phase > 0:
             displays_to_render.append(OVERLAY_DISPLAY)
-        
         return displays_to_render
 
     
