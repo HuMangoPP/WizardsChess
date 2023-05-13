@@ -30,7 +30,7 @@ class Sparks:
         self.particles = []
         self.groups = groups
         self.glow = glow
-        self.spawn_rate = 0.01
+        self.spawn_rate = 0.025
         self.spawn_time = 0
 
     def spawn_particles(self):
@@ -38,7 +38,7 @@ class Sparks:
             angle_range = 2 * math.pi
             angle = 3 * math.pi / 2 + random.uniform(0, angle_range) - angle_range / 2
             pos = np.array(self.anchor) + MAJOR_AXIS * np.array([math.cos(angle), math.sin(angle)])
-            vel = random.uniform(200, 250) * np.array([math.cos(angle), math.sin(angle)])
+            vel = random.uniform(50, 100) * np.array([math.cos(angle), math.sin(angle)])
             lifetime = LIFETIME * random.uniform(0.5, 1)
             self.particles.append([
                 pos, vel, lifetime
@@ -52,7 +52,7 @@ class Sparks:
             self.spawn_time = 0
         
         for i in range(len(self.particles)-1, -1, -1):
-            self.particles[i][1] = self.particles[i][1] + np.array([0, 400]) * dt
+            # self.particles[i][1] = self.particles[i][1] + np.array([0, 400]) * dt
             self.particles[i][0] = self.particles[i][0] + self.particles[i][1] * dt
             self.particles[i][2] -= dt
             if self.particles[i][2] <= 0:

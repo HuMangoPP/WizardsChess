@@ -58,7 +58,7 @@ def get_spell_card_palettes(card_designs: dict[str, pg.Surface]) -> dict[str, di
 class Client:
     def __init__(self):
         pg.init()
-        self.res = (960, 1000)
+        self.res = (1000, 1000)
 
         pg.display.set_mode(self.res, pg.OPENGL | pg.DOUBLEBUF)
         self.ctx = mgl.create_context()
@@ -75,8 +75,8 @@ class Client:
         }
         self.clock = pg.time.Clock()
 
-        self.piece_collection = get_chess_piece_palettes(load_sprites(path='./assets/chess_pieces', scale=4, colorkey=(0, 255, 0)))
-        self.card_collection = get_spell_card_palettes(load_sprites(path='./assets/cards', scale=4, colorkey=(0, 0, 0)))
+        self.piece_collection = get_chess_piece_palettes(load_sprites(path='./assets/chess_pieces', scale=3, colorkey=(0, 255, 0)))
+        self.card_collection = get_spell_card_palettes(load_sprites(path='./assets/cards', scale=3, colorkey=(0, 0, 0)))
 
         self.menus = [StartMenu(self), WaitingRoom(self), GameMenu(self)]
         self.current_menu = 0

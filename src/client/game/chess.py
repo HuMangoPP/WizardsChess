@@ -2,7 +2,7 @@ import pygame as pg
 
 WHITE_PIECES = 'PNBRQK'
 BLACK_PIECES = 'pnbrqk'
-TILESIZE = 64
+TILESIZE = 48
 
 class Board:
     def __init__(self, menu, fen_str: str, occupy: list[int]):

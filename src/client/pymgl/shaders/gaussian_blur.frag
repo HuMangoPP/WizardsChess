@@ -1,5 +1,5 @@
 #version 330 core
-#define KERNEL_SIZE 8
+#define KERNEL_SIZE 5
 
 layout (location = 0) out vec4 fragColor;
 
@@ -7,7 +7,7 @@ in vec2 uvs;
 in vec2 screen_res;
 
 uniform sampler2D tex;
-uniform float weight[KERNEL_SIZE] = float[] (0.1974,	0.1747,	0.1210,	0.0656,	0.0278,	0.0092,	0.0024,	0.0005);
+uniform float weight[KERNEL_SIZE] = float[] (0.3829,	0.2417,	0.0606,	0.0060,	0.0002);
 
 void main() {
     vec2 st = gl_FragCoord.xy/screen_res;

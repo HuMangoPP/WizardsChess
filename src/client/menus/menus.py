@@ -158,7 +158,6 @@ class GameMenu:
         # assets
         self.piece_collection = client.piece_collection
         self.card_collection = client.card_collection
-        self.cursor = Sparks(pg.mouse.get_pos(), (25, 25, 25))
 
         # transition handler
         self.goto = 'start'
@@ -224,8 +223,7 @@ class GameMenu:
 
         # hand update
         self.p_hand.update(events, dt)
-
-        self.cursor.update(dt, pg.mouse.get_pos())
+        self.o_hand.update()
 
         if self.transition_phase > 0:
             self.transition_time += dt
@@ -252,8 +250,6 @@ class GameMenu:
         self.board.render()
         self.p_hand.render(self.displays)
         self.o_hand.render(self.displays[DEFAULT_DISPLAY])
-
-        self.cursor.render(self.displays[EFFECTS_DISPLAY])
 
         match self.transition_phase:
             case 1: 

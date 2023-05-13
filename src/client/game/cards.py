@@ -23,44 +23,44 @@ class Hand:
                     if card_rect.collidepoint(event.pos[0], event.pos[1]):
                         self.cards[i].scroll_card_face()
             
-        [self.cards[i].update((0, self.card_height * i), dt) for i in range(len(self.cards))]
-
+        [self.cards[i].update((self.card_width * (i - len(self.cards) / 2) + 500, 750), dt) for i in range(len(self.cards))]
 
     def render(self, displays: dict[str, pg.Surface]):
         [card.render(displays) for card in self.cards]
 # this class will allow me to encapsulate some static functionality that i want for a card
 # this dict maps spell names to a parametric function that determines the wand path
+# each card is [name: str, num_moves: int, optional: int]
 CARD_EFFECTS = {
-    'avada_kedavra': 'death', # literally dies
-    'accio': 'move_close', # moves any of your pieces towards you 1 or 2 squares
-    'depulso': 'move_away', # moves any of your pieces away from you 1 or 2 squares
-    'confundus': 'move_random', # randomly moves like a king
-    'deprimo': 'remove_square', # removes a square from being used for 2/3 moves, cannot be used on occupied squares
-    'reducio': 'shrink', # can move but cannot capture
-    'expelliarmus': '', #
-    'disillusionment': 'invisible', # the chess piece becomes invisible for 2/3 moves
-    'duro': 'cannot_move', # turns to stone, cannot move for 1 move
-    'engorgio': 'grow', # counter spell for shrink
-    'expecto_patronum': '', #
-    'fiendfyre': 'capture_radius', # used on a piece and allows it to capture any enemy piece in a given radius, the attacking piece is removed afterwards
-    'finite_incantatem': 'remove', # removes a random effect on a piece
-    'flipendo': 'move_away', # similar to depulso, perhaps a stronger variant?
-    'immobulus': 'cannot_move', # stronger variant of duro
-    'petrificus_totalus': 'cannot_move', # strongest variant of duro
-    'fumos': 'invisible', # weaker variant, not true invisibility
-    'apparition': 'move_anywhere', # moves one of your pieces anywhere so long as the new square is not occupied
-    'cruciatus': 'cannot_move', # piece cannot be moved for the rest of the game
-    'confringo': 'capture_radius', # similar to fiendfyre
-    'impedimenta':'move_random', #
-    'imperius': 'control', # allows player to control an enemy piece for 3 moves
-    'locomotor': 'control', # weaker variant of imperius
-    'legilimens': 'reveal', # permanently reveals one of opponent's cards (you know when they play the card)
-    'revelio': 'reveal', # reveals one of opponent's cards
-    'obscuro': 'invisible', # weaker
-    'reparo': 'repair', # repairs broken grid tiles
-    'prior_incantato': 'echo', # allows the user to use the last spell on the field (from either side)
-    'protego': 'shield', # target cannot be captured for 2 rounds, attempts to capture are stopped and opponent uses a move
-    'stupefy': 'break', # breaks a shield
+    'avada_kedavra': ['death', 1], # literally dies
+    'accio': ['move_close', 1, 1], # moves any of your pieces towards you 1 or 2 squares
+    'depulso': ['move_away', 1, 1], # moves any of your pieces away from you 1 or 2 squares
+    'confundus': ['move_random', 1], # randomly moves like a king
+    'deprimo': ['remove_square', 2], # removes a square from being used for 2/3 moves, cannot be used on occupied squares
+    'reducio': ['shrink', 2], # can move but cannot capture
+    'expelliarmus': ['backfire', 3], # next attack from this piece fails
+    'disillusionment': ['invisible', 2], # the chess piece becomes invisible for 2/3 moves
+    'duro': ['cannot_move', 1], # turns to stone, cannot move for 1 move
+    'engorgio': ['grow', 2], # counter spell for shrink
+    # 'expecto_patronum': '', #
+    'fiendfyre': ['area_attack', 1, 2], # used on a piece and allows it to capture any enemy piece in a given radius, the attacking piece is removed afterwards
+    'finite_incantatem': ['remove', 1], # removes a random effect on a piece
+    'flipendo': ['move_away', 1, 2], # similar to depulso, perhaps a stronger variant?
+    'immobulus': ['cannot_move', 2], # stronger variant of duro
+    'petrificus_totalus': ['cannot_move', 3], # strongest variant of duro
+    'fumos': ['invisible', 2], # weaker variant, not true invisibility
+    'apparition': ['move_anywhere', 1], # moves one of your pieces anywhere so long as the new square is not occupied
+    'cruciatus': ['cannot_move', -1], # piece cannot be moved for the rest of the game
+    'confringo': ['area_attack', 1, 1], # similar to fiendfyre
+    'impedimenta': ['move_random', 1], # opponent piece randomly moves to unoccupied tile
+    'imperius': ['control', 3], # allows player to control an enemy piece for 3 moves
+    'locomotor': ['control', 1], # weaker variant of imperius
+    'legilimens': ['reveal', 1], # permanently reveals one of opponent's cards (you know when they play the card)
+    'revelio': ['reveal', 1], # reveals one of opponent's cards
+    'obscuro': ['invisible', 1], # weaker
+    'reparo': ['repair', 1], # repairs broken grid tiles
+    'prior_incantato': ['echo', 1], # allows the user to use the last spell on the field (from either side)
+    'protego': ['shield', 2], # target cannot be captured for 2 rounds, attempts to capture are stopped and opponent uses a move
+    'stupefy': ['break', 1], # breaks a shield
 
 }
 
@@ -128,12 +128,12 @@ SPELL_WAND_PATHS = {
     'confringo': lambda t : (1.85 * (abs(t / 0.66 - math.floor(t / 0.66 + 0.5)) - 0.25),
                              0.6 * (1 / (1 + math.exp(-10 * (t - 0.5))) - 0.5)),
     'impedimenta': lambda t : (0.85 * (t - 0.5), 0),
-    'imperius': lambda t : (-0.85 * (abs(t - math.floor(t + 0.5)) - 0.15) if t <= 0.75 else -0.1,
+    'imperius': lambda t : (-(abs(t - math.floor(t + 0.5)) - 0.25) if t <= 0.85 else 0.1,
                             0.25 if t <= 0.5 else -abs(t / 0.5 - math.floor(t / 0.5 + 0.5)) + 0.25),
     'locomotor': lambda t : (0.85 * (t - 0.5), -0.85 * (t - 0.5)),
     'legilimens': lambda t : (-1.9 * (abs(t - 0.5) - 0.25), -0.2 * math.sin(2 * math.pi * t)),
-    'reparo': lambda t : (0.85 * (abs((t - 0.25) - math.floor((t - 0.25) + 0.5)) - 0.25),
-                          -5 * abs(max(min(t, 0.75), 0.25) - 0.45) * (abs(max(min(t, 0.75), 0.25) - 0.5) - 0.1)),
+    'reparo': lambda t : (1.5 * (abs((t - 0.25) - math.floor((t - 0.25) + 0.5)) - 0.25),
+                          -2 * abs(max(min(t, 0.75), 0.25) - 0.45) + 0.25),
     'prior_incantato': lambda t : (-0.45 * math.sin(2 * math.pi * t), -0.45 * math.cos(2 * math.pi * t)),
     'protego': lambda t : (0, -0.85 * (t - 0.5)),
     'stupefy': lambda t : (0, 0.85 * (t - 0.5)),
@@ -146,19 +146,17 @@ SPELL_WAND_PATHS = {
 
 def draw_wand_path(card: pg.Surface, path: callable):
     width, height = card.get_size()
-    width -= 10
-    height -= 10
     points = [path(t/20) for t in range(0, 20)]
     for i in range(len(points) - 1):
         pg.draw.line(card, (255, 255, 255), 
-                     (width * (points[i][0] + 0.5), height * (points[i][1] + 0.5)),
-                     (width * (points[i+1][0] + 0.5), height * (points[i+1][1] + 0.5)), 5)
+                     np.array([width/2, height/2]) + np.array([(width-50) * points[i][0], (height-50) * points[i][1]]), 
+                     np.array([width/2, height/2]) + np.array([(width-50) * points[i+1][0], (height-50) * points[i+1][1]]), 5)
 
 def trace_wand_path(card_rect: pg.Rect, path: callable, t: float):
     anchor = path(t)
     width, height = card_rect.size
-    width -= 10
-    height -= 10
+    width -= 50
+    height -= 50
     return np.array(card_rect.center) + np.array([width * anchor[0], height * anchor[1]])
 
 class Card:
@@ -205,12 +203,20 @@ class HiddenHand:
         self.card_width = card_designs['gryffindor_gold']['border'].get_width()
         self.card_height = card_designs['gryffindor_gold']['border'].get_height()
 
+    def update(self):
+        [self.cards[i].update((self.card_width * (i - len(self.cards) / 2) + 500, 0)) for i in range(len(self.cards))]
+
     def render(self, display: pg.Surface):
-        [card.render(display, (960-self.card_width, self.card_height * i)) for i, card in enumerate(self.cards)]
+        [card.render(display) for i, card in enumerate(self.cards)]
 
 class HiddenCard:
-    def __init__(self, card_designs: dict[str, pg.Surface], color_theme: str):
+    def __init__(self, card_designs: dict[str, dict[str, pg.Surface]], color_theme: str):
         self.card_face = card_designs[color_theme]['sleeve'].copy()
+        self.draw_rect = self.card_face.get_rect()
     
-    def render(self, display: pg.Surface, pos: tuple[int, int]):
-        display.blit(self.card_face, pos)
+    def update(self, topleft: tuple[int, int]):
+        self.draw_rect.top = topleft[1]
+        self.draw_rect.left = topleft[0]
+
+    def render(self, display: pg.Surface):
+        display.blit(self.card_face, self.draw_rect)
