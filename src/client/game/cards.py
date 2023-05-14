@@ -7,6 +7,7 @@ from ..vfx.particles import Sparks
 class Hand:
     def __init__(self, font, hand: list[str], card_designs: dict[str, dict[str, pg.Surface]], color_theme: str):
         self.cards = [Card(font, card_designs, card_name, color_theme) for card_name in hand]
+        self.using = []
         # a card is a struct specifying a unique id (for reference),
         # a sprite, a descriptions, and some additional data representing
         # card functionality, perhaps a target (which can be a chess piece),
@@ -17,13 +18,21 @@ class Hand:
 
     def update(self, events: list[pg.Event], dt: float):
         for event in events:
+            if event.type == pg.MOUSEBUTTONUP:
+                dragged = [card for card in self.cards if card.click(event.pos)]
+                [self.using.append(card) for card in dragged]
+                [self.cards.remove(card) for card in dragged]
             if event.type == pg.MOUSEBUTTONDOWN:
-                [card.click(event.pos) for card in self.cards]
-            
-        [self.cards[i].update((self.card_width * (i - len(self.cards) / 2) + 500, 750), dt) for i in range(len(self.cards))]
+                [card.hold(event.pos) for card in self.cards]
+                clicked = [card for card in self.using if card.click(event.pos)]
+                [self.cards.append(card) for card in clicked]
+                [self.using.remove(card) for card in clicked]
+        [card.update((self.card_width * (i - len(self.cards) / 2) + 500, 750), dt) for i, card in enumerate(self.cards)]
+        [card.update((self.card_width * (i - len(self.using) / 2) + 500, 450), dt) for i, card in enumerate(self.using)]
 
     def render(self, displays: dict[str, pg.Surface]):
         [card.render(displays) for card in self.cards]
+        [card.render(displays) for card in self.using]
 
 # this class will allow me to encapsulate some static functionality that i want for a card
 # this dict maps spell names to a parametric function that determines the wand path
@@ -215,12 +224,18 @@ class Card:
         self.sparks = Sparks(self.draw_rect.center, self.spell_color)
         self.current_side_up = 0
 
+        self.held = False
+        self.mouse_offset = (0, 0)
+
         # status effects of the card
         self.card_effect = CARD_EFFECTS[spell]
     
     def update(self, topleft: tuple[int, int], dt: float):
-        self.draw_rect.top = topleft[1]
-        self.draw_rect.left = topleft[0]
+        if self.held:
+            self.draw_rect.centerx = pg.mouse.get_pos()[0] - self.mouse_offset[0]
+            self.draw_rect.centery = pg.mouse.get_pos()[1] - self.mouse_offset[1]
+        else:
+            self.draw_rect.left, self.draw_rect.top = topleft
 
         self.t += dt
         if self.t > 1:
@@ -228,9 +243,18 @@ class Card:
         new_anchor = trace_wand_path(self.draw_rect, SPELL_WAND_PATHS[self.spell], self.t)
         self.sparks.update(dt, new_anchor)
 
-    def click(self, mouse: tuple[int, int]):
+    def hold(self, mouse: tuple[int, int]):
+        if self.draw_rect.collidepoint(mouse):
+            self.held = True
+            self.mouse_offset = np.array(mouse) - np.array(self.draw_rect.center)
+
+    def click(self, mouse: tuple[int, int]) -> bool:
+        self.held = False
+        if self.draw_rect.top <= 500: 
+            return True
         if self.draw_rect.collidepoint(mouse):
             self.scroll_card_face()
+        return False
 
     def scroll_card_face(self):
         self.current_side_up = (self.current_side_up + 1) % 2

@@ -31,4 +31,5 @@ class Network:
             return res
         except socket.error as e:
             # print(e)
-            pass
+            return {}
+            # pass

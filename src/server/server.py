@@ -47,7 +47,7 @@ def threaded_client(conn: socket.socket, p: str, game_id: int):
                             }
                         case 'move':
                             game.make_move(req['move'])
-                            reply = {}
+                            reply = {'res': True}
                         case 'ready':
                             reply = {
                                 'game_state': game.is_ready()
@@ -56,12 +56,12 @@ def threaded_client(conn: socket.socket, p: str, game_id: int):
                             reply = game.get_hand_state(req['p_side'])
                         case 'play_card':
                             game.play_card(req['card_play'])
-                            reply = {}
+                            reply = {'res': True}
                 reply = json.dumps(reply)
                 conn.sendall(str.encode(reply))
             else:
                 break
-        except:
+        except Exception as e:
             break
 
     print('lost connection')

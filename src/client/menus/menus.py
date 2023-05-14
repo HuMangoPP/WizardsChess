@@ -207,7 +207,11 @@ class GameMenu:
                 'p_side': self.p_side
             }
             res = self.client.n.send(req)
-            self.board.update_board_state(res['board_state'], res['occupy'])
+            if res:
+                self.board.update_board_state(res['board_state'], res['occupy'])
+            else:
+                self.goto = 'start'
+                self.transition_phase = 1
         except:
             pass
             
@@ -218,6 +222,9 @@ class GameMenu:
                 res = self.client.n.send(req)
                 if res:
                     self.board.update_legal_moves(res['legal_moves'])
+                else:
+                    self.goto = 'start'
+                    self.transition_phase = 1
             except:
                 pass
 
