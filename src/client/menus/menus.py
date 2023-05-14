@@ -184,7 +184,7 @@ class GameMenu:
             'p_side': self.p_side
         }
         res = self.client.n.send(req)
-        self.p_hand = Hand(res['p_hand'], self.card_collection, self.white_theme)
+        self.p_hand = Hand(self.font, res['p_hand'], self.card_collection, self.white_theme)
         self.o_hand = HiddenHand(res['o_hand'], self.card_collection, self.white_theme)
 
     def on_transition(self):

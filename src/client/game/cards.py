@@ -5,8 +5,8 @@ import math
 from ..vfx.particles import Sparks
 
 class Hand:
-    def __init__(self, hand: list[str], card_designs: dict[str, dict[str, pg.Surface]], color_theme: str):
-        self.cards = [Card(card_designs, card_name, color_theme) for card_name in hand]
+    def __init__(self, font, hand: list[str], card_designs: dict[str, dict[str, pg.Surface]], color_theme: str):
+        self.cards = [Card(font, card_designs, card_name, color_theme) for card_name in hand]
         # a card is a struct specifying a unique id (for reference),
         # a sprite, a descriptions, and some additional data representing
         # card functionality, perhaps a target (which can be a chess piece),
@@ -18,15 +18,13 @@ class Hand:
     def update(self, events: list[pg.Event], dt: float):
         for event in events:
             if event.type == pg.MOUSEBUTTONDOWN:
-                for i in range(len(self.cards)):
-                    card_rect = pg.Rect(0, self.card_height * i, self.card_width, self.card_height)
-                    if card_rect.collidepoint(event.pos[0], event.pos[1]):
-                        self.cards[i].scroll_card_face()
+                [card.click(event.pos) for card in self.cards]
             
         [self.cards[i].update((self.card_width * (i - len(self.cards) / 2) + 500, 750), dt) for i in range(len(self.cards))]
 
     def render(self, displays: dict[str, pg.Surface]):
         [card.render(displays) for card in self.cards]
+
 # this class will allow me to encapsulate some static functionality that i want for a card
 # this dict maps spell names to a parametric function that determines the wand path
 # each card is [name: str, num_moves: int, optional: int]
@@ -79,7 +77,7 @@ SPELL_COLORS = {
     'finite_incantatem': (45, 25, 25),
     'flipendo': (35, 35, 20),
     'immobulus': (25, 25, 50),
-    'petrificus_totalus': (),
+    'petrificus_totalus': (25, 25, 25),
     'fumos': (20, 20, 20),
     'cruciatus': (50, 25, 25),
     'confringo': (40, 30, 20),
@@ -144,26 +142,66 @@ SPELL_WAND_PATHS = {
                            0.35 * math.sin(2 * math.pi * (t - 0.1)) if t <= 0.75 else 2 * (t - 0.85))
 }
 
+SPELL_DESC = {
+    'avada_kedavra': 'instantly kill an opponent piece. killing the king is checkmate.',
+    'accio': 'instantly move a piece one square towards you.',
+    'depulso': 'instantly move a piece one sqaure away from you',
+    'confundus': 'instantly cause an opponent piece to move randomly to an empty square.',
+    'deprimo': 'instantly destroy an empty tile, so it cannot be occupied for the rest of the game.',
+    'reducio': 'shrink an opponent piece. shrunk pieces can move but cannot capture. counter spell for engorgio.',
+    'expelliarmus': 'your opponents next spell will have no effect.',
+    'disillusionment': 'target piece will become invisible for 2 rounds.',
+    'duro': 'target piece cannot move for the next round.',
+    'engorgio': 'enlarge a piece. enlarged pieces can capture an adjacent square. counter spell for reducio.',
+    'fiendfyre': 'capture any piece as long as it is 2 squares away. this piece dies afterwards.',
+    'finite_incantatem': 'general counter spell. remove any spell effect on a piece.',
+    'flipendo': 'instantly move a piece two squares away from you.',
+    'immobulus': 'target piece cannot move for the next 2 rounds.',
+    'petrificus_totalus': 'target piece cannot move for the next 3 rounds.',
+    'fumos': 'target piece will be invisible for the next round.',
+    'cruciatus': 'target piece cannot move for the rest of the game.',
+    'confringo': 'capture any piece so long as it is adjacent.',
+    'impedimenta': 'instantly cause an opponent piece to move randomly one square.',
+    'imperius': 'control the target piece for the next 3 rounds.',
+    'locomotor': 'control the target piece for the next round.',
+    'legilimens': 'reveal all cards in play.',
+    'reparo': 'repair a broken tile.',
+    'prior_incantato': 'use the last spell performed by either side.',
+    'protego': 'shield a piece from the next spell. lasts 3 rounds.',
+    'stupefy': 'quick cast. overcomes protego.',
+    'apparition': 'instantly moves any piece on the board to any empty square.',
+    'revelio': 'reveal your opponents entire hand.',
+    'obscuro': 'opponent cannot see you cast a spell.',
+}
+
 def draw_wand_path(card: pg.Surface, path: callable):
     width, height = card.get_size()
     points = [path(t/20) for t in range(0, 20)]
     for i in range(len(points) - 1):
         pg.draw.line(card, (255, 255, 255), 
-                     np.array([width/2, height/2]) + np.array([(width-50) * points[i][0], (height-50) * points[i][1]]), 
-                     np.array([width/2, height/2]) + np.array([(width-50) * points[i+1][0], (height-50) * points[i+1][1]]), 5)
+                     np.array([width/2, height/2]) + np.array([(width - 50) * points[i][0], (width-50) * points[i][1]]), 
+                     np.array([width/2, height/2]) + np.array([(width - 50) * points[i+1][0], (width-50) * points[i+1][1]]), 5)
+
+def render_card_name(font, card: pg.Surface, spell_name: str):
+    width = card.get_width()
+    text = spell_name.replace('_', ' ')
+    font.render(card, text, width / 2, 40, (255, 255, 255), 10, 'center', box_width=width-20)
 
 def trace_wand_path(card_rect: pg.Rect, path: callable, t: float):
     anchor = path(t)
     width, height = card_rect.size
-    width -= 50
-    height -= 50
-    return np.array(card_rect.center) + np.array([width * anchor[0], height * anchor[1]])
+    return np.array(card_rect.center) + (width - 50) * np.array([anchor[0], anchor[1]])
+
+def render_card_desc(font, card: pg.Surface, spell_name: str):
+    font.render(card, SPELL_DESC[spell_name], 35, 50, (255, 255, 255), 10, box_width=card.get_width()-70)
 
 class Card:
-    def __init__(self, card_designs: dict[str, dict[str, pg.Surface]], spell: str, color_theme: str):
+    def __init__(self, font, card_designs: dict[str, dict[str, pg.Surface]], spell: str, color_theme: str):
         card = card_designs[color_theme]['border'].copy()
         draw_wand_path(card, SPELL_WAND_PATHS[spell])
+        render_card_name(font, card, spell)
         text = card_designs[color_theme]['border'].copy()
+        render_card_desc(font, text, spell)
         self.draw_rect = card.get_rect()
 
         self.card_faces = [
@@ -190,12 +228,17 @@ class Card:
         new_anchor = trace_wand_path(self.draw_rect, SPELL_WAND_PATHS[self.spell], self.t)
         self.sparks.update(dt, new_anchor)
 
+    def click(self, mouse: tuple[int, int]):
+        if self.draw_rect.collidepoint(mouse):
+            self.scroll_card_face()
+
     def scroll_card_face(self):
         self.current_side_up = (self.current_side_up + 1) % 2
 
     def render(self, displays: dict[str, pg.Surface]):
         displays['default'].blit(self.card_faces[self.current_side_up], self.draw_rect)
-        self.sparks.render(displays['gaussian_blur'])
+        if self.current_side_up == 0:
+            self.sparks.render(displays['gaussian_blur'])
 
 class HiddenHand:
     def __init__(self, hand_size: int, card_designs: dict[str, dict[str, pg.Surface]], color_theme: str):

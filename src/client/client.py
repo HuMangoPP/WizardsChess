@@ -76,7 +76,7 @@ class Client:
         self.clock = pg.time.Clock()
 
         self.piece_collection = get_chess_piece_palettes(load_sprites(path='./assets/chess_pieces', scale=3, colorkey=(0, 255, 0)))
-        self.card_collection = get_spell_card_palettes(load_sprites(path='./assets/cards', scale=3, colorkey=(0, 0, 0)))
+        self.card_collection = get_spell_card_palettes(load_sprites(path='./assets/cards', scale=4, colorkey=(0, 0, 0)))
 
         self.menus = [StartMenu(self), WaitingRoom(self), GameMenu(self)]
         self.current_menu = 0
