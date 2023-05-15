@@ -105,29 +105,30 @@ class Board:
                 else:
                     self.hovered_square = chunked_x + chunked_y * 8
             if event.type == pg.MOUSEBUTTONDOWN:
-                if self.held_piece:
-                    if self.hovered_square in self.legal_moves:
-                        # send data to server to make a move
+                if self.menu.p_hand.new_card_in_queue is None:
+                    if self.held_piece:
+                        if self.hovered_square in self.legal_moves:
+                            # send data to server to make a move
+                            req = {
+                                'req_type': 'move_piece',
+                                'p_side': self.menu.p_side,
+                                'move': [self.prev_square, self.hovered_square]
+                            }
+                            self.prev_square = -1
+                            self.held_piece = ''
+                            self.legal_moves = set()
+                        else:
+                            self.prev_square = -1
+                            self.held_piece = ''
+                            self.legal_moves = set()
+                    elif self.hovered_square in self.occupied:
+                        # send data to server to retrieve info about legal moves
                         req = {
-                            'req_type': 'move_piece',
-                            'p_side': self.menu.p_side,
-                            'move': [self.prev_square, self.hovered_square]
+                            'req_type': 'pickup',
+                            'square': self.hovered_square
                         }
-                        self.prev_square = -1
-                        self.held_piece = ''
-                        self.legal_moves = set()
-                    else:
-                        self.prev_square = -1
-                        self.held_piece = ''
-                        self.legal_moves = set()
-                elif self.hovered_square in self.occupied:
-                    # send data to server to retrieve info about legal moves
-                    req = {
-                        'req_type': 'pickup',
-                        'square': self.hovered_square
-                    }
-                    self.prev_square = self.hovered_square
-                    self.held_piece = self.board[self.hovered_square]
+                        self.prev_square = self.hovered_square
+                        self.held_piece = self.board[self.hovered_square]
         return req
 
     def render_pieces(self):

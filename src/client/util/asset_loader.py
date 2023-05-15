@@ -1,5 +1,5 @@
 import pygame as pg
-import os
+import os, json
 
 def load_spritesheet(path: str, scale=1, colorkey=(0, 0, 0)) -> list[pg.Surface]:
     '''
@@ -86,3 +86,7 @@ def load_sprite_groups(path: str, scale=1, colorkey=(0, 0, 0)) -> dict[str, dict
         sprite_groups[sprite_group] = load_sprites(os.path.join(path, sprite_group), scale, colorkey)
     
     return sprite_group
+
+def load_json(path: str) -> dict:
+    with open(path) as f:
+        return json.load(f)

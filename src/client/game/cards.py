@@ -3,6 +3,9 @@ import numpy as np
 import math
 
 from ..vfx.particles import Sparks
+from ..util.asset_loader import load_json
+
+TILESIZE = 48
 
 class Hand:
     def __init__(self, menu, hand: list[str]):
@@ -13,138 +16,73 @@ class Hand:
         self.cards = []
         self.queue = []
         self.update_hand(hand, [])
-        # a card is a struct specifying a unique id (for reference),
-        # a sprite, a descriptions, and some additional data representing
-        # card functionality, perhaps a target (which can be a chess piece),
-        # a timer (the duration left for the card's effect), an effect key
-        # (to keep track of what the effect is), etc...
+
         self.card_width = self.card_designs['gryffindor_gold']['border'].get_width()
         self.card_height = self.card_designs['gryffindor_gold']['border'].get_height()
 
-    def update_hand(self, hand: list[str], queue: list[str]):
+        self.new_card_in_queue = None
+
+    def update_hand(self, hand: list[str], queue: list[tuple[str, int]]):
         new_hand = [card for card in self.cards if card.spell in hand]
         [hand.remove(card.spell) for card in new_hand]
         [new_hand.append(Card(self.font, self.card_designs, spell, self.color_theme)) for spell in hand]
         self.cards = new_hand
 
-        new_queue = [card for card in self.queue if card.spell in queue]
-        [queue.remove(card.spell) for card in new_queue]
-        [new_queue.append(Card(self.font, self.card_designs, spell, self.color_theme)) for spell in queue]
-        self.queue = new_queue
+        # a card in the queue is represented by [Card object, target square]
+        self.queue = [card_play for card_play in self.queue if [card_play[0].spell, card_play[1]] in queue]
 
     def input(self, events: list[pg.Event]) -> dict:
         req = {}
         for event in events:
             if event.type == pg.MOUSEBUTTONUP:
-                # determine which cards were dragged and put them into the using list
-                dragged = [card for card in self.cards if card.release()]
-                # add all of the dragged cards to the queue
-                self.queue = list(set(self.queue).union(set(dragged)))
-                # remove all of the dragged cards to the hand
-                self.cards = list(set(self.cards).difference(set(dragged)))
-                req = {
-                    'req_type': 'play_cards',
-                    'p_side': self.menu.p_side,
-                    'cards': [card.spell for card in self.queue]
-                }
-            if event.type == pg.MOUSEBUTTONDOWN:
-                # begin dragging a card
-                [card.hold(event.pos) for card in self.cards]
-                # # check which cards we want to return to our hand
-                back_to_hand = [card for card in self.queue if card.release()]
-                # add all returned cards to hand
-                self.cards = list(set(self.cards).union(set(back_to_hand)))
-                # remove returned cards from queue
-                self.queue = list(set(self.queue).difference(set(back_to_hand)))
-                req = {
-                    'req_type': 'play_cards',
-                    'p_side': self.menu.p_side,
-                    'cards': [card.spell for card in self.queue]
-                }
+                # determine which cards in queue were clicked
+                if self.new_card_in_queue:
+                    zeroed_x = event.pos[0] - self.menu.board.board_rect.left
+                    zeroed_y = event.pos[1] - self.menu.board.board_rect.top
+                    chunked_x = zeroed_x // TILESIZE
+                    if self.menu.board.flip:
+                        chunked_y = 7 - zeroed_y // TILESIZE
+                    else:
+                        chunked_y = zeroed_y // TILESIZE
+                    if (0 <= chunked_x and chunked_x < 8) and (0 <= chunked_y and chunked_y < 8):
+                        target = chunked_x + chunked_y * 8
+                        new_card_play = [self.new_card_in_queue, target]
+                        self.queue.append(new_card_play)
+                        req = {
+                            'req_type': 'play_cards',
+                            'p_side': self.menu.p_side,
+                            'cards': [[card[0].spell, card[1]] for card in self.queue],
+                        }
+                    self.new_card_in_queue = None
+                    
+                else:
+                    # get the card in the hand that was clicked
+                    card_queue = set([card_play[0] for card_play in self.queue])
+                    to_queue = [card for card in self.cards if card.click(event.pos) and card not in card_queue]
+                    if to_queue:
+                        self.new_card_in_queue = to_queue[0]
+
+                    # get the indices in queue that are to be returned
+                    to_hand = {i for i, card in enumerate(self.queue) if card[0].click(event.pos)}
+                    [self.queue.pop(i) for i in to_hand]
+                
+
         return req
 
     def update(self, events: list[pg.Event], dt: float):
         for event in events:
             if event.type == pg.MOUSEBUTTONUP:
                 [card.scroll_card_face(event.pos) for card in self.cards]
-                # [card.scroll_card_face(event.pos) for card in self.using]
-        [card.update((self.card_width * (i - len(self.cards) / 2) + 500, 750), dt) for i, card in enumerate(self.cards)]
-        [card.update((self.card_width * (i - len(self.queue) / 2) + 500, 450), dt) for i, card in enumerate(self.queue)]
+        card_queue = set([card_play[0] for card_play in self.queue])
+        [card.update((self.card_width * (i - len(self.cards) / 2) + 500, 650 if card in card_queue else 750), dt) for i, card in enumerate(self.cards)]
 
     def render(self, displays: dict[str, pg.Surface]):
         [card.render(displays) for card in self.cards]
-        [card.render(displays) for card in self.queue]
 
 # this class will allow me to encapsulate some static functionality that i want for a card
 # this dict maps spell names to a parametric function that determines the wand path
 # each card is [name: str, num_moves: int, optional: int]
 # TODO: move these into a .json file
-CARD_EFFECTS = {
-    'avada_kedavra': ['death', 1], # literally dies
-    'accio': ['move_close', 1, 1], # moves any of your pieces towards you 1 or 2 squares
-    'depulso': ['move_away', 1, 1], # moves any of your pieces away from you 1 or 2 squares
-    'confundus': ['move_random', 1], # randomly moves like a king
-    'deprimo': ['remove_square', 2], # removes a square from being used for 2/3 moves, cannot be used on occupied squares
-    'reducio': ['shrink', 2], # can move but cannot capture
-    'expelliarmus': ['backfire', 3], # next attack from this piece fails
-    'disillusionment': ['invisible', 2], # the chess piece becomes invisible for 2/3 moves
-    'duro': ['cannot_move', 1], # turns to stone, cannot move for 1 move
-    'engorgio': ['grow', 2], # counter spell for shrink
-    # 'expecto_patronum': '', #
-    'fiendfyre': ['area_attack', 1, 2], # used on a piece and allows it to capture any enemy piece in a given radius, the attacking piece is removed afterwards
-    'finite_incantatem': ['remove', 1], # removes a random effect on a piece
-    'flipendo': ['move_away', 1, 2], # similar to depulso, perhaps a stronger variant?
-    'immobulus': ['cannot_move', 2], # stronger variant of duro
-    'petrificus_totalus': ['cannot_move', 3], # strongest variant of duro
-    'fumos': ['invisible', 2], # weaker variant, not true invisibility
-    'apparition': ['move_anywhere', 1], # moves one of your pieces anywhere so long as the new square is not occupied
-    'cruciatus': ['cannot_move', -1], # piece cannot be moved for the rest of the game
-    'confringo': ['area_attack', 1, 1], # similar to fiendfyre
-    'impedimenta': ['move_random', 1], # opponent piece randomly moves to unoccupied tile
-    'imperius': ['control', 3], # allows player to control an enemy piece for 3 moves
-    'locomotor': ['control', 1], # weaker variant of imperius
-    'legilimens': ['reveal', 1], # permanently reveals one of opponent's cards (you know when they play the card)
-    'revelio': ['reveal', 1], # reveals one of opponent's cards
-    'obscuro': ['invisible', 1], # weaker
-    'reparo': ['repair', 1], # repairs broken grid tiles
-    'prior_incantato': ['echo', 1], # allows the user to use the last spell on the field (from either side)
-    'protego': ['shield', 2], # target cannot be captured for 2 rounds, attempts to capture are stopped and opponent uses a move
-    'stupefy': ['break', 1], # breaks a shield
-
-}
-
-SPELL_COLORS = {
-    'avada_kedavra': (25, 50, 25),
-    'accio': (25, 25, 25),
-    'depulso': (25, 25, 25),
-    'confundus': (40, 20, 25),
-    'deprimo': (25, 40, 25),
-    'reducio': (35, 20, 35),
-    'expelliarmus': (50, 25, 25),
-    'disillusionment': (25, 25, 25),
-    'duro': (25, 25, 25),
-    'engorgio': (20, 25, 40),
-    'fiendfyre': (40, 30, 20),
-    'finite_incantatem': (45, 25, 25),
-    'flipendo': (35, 35, 20),
-    'immobulus': (25, 25, 50),
-    'petrificus_totalus': (25, 25, 25),
-    'fumos': (20, 20, 20),
-    'cruciatus': (50, 25, 25),
-    'confringo': (40, 30, 20),
-    'impedimenta': (20, 35, 35),
-    'imperius': (30, 30, 30),
-    'locomotor': (25, 25, 25),
-    'legilimens': (25, 25, 25),
-    'reparo': (25, 35, 45),
-    'prior_incantato': (40, 35, 20),
-    'protego': (30, 30, 30),
-    'stupefy': (50, 25, 25),
-    'apparition': (25, 25, 25),
-    'revelio': (40, 40, 25),
-    'obscuro': (25, 25, 25),
-}
-
 SPELL_WAND_PATHS = {
     'avada_kedavra': lambda t : (-0.3 * (t - math.floor(0.5 + t)), 0.6 * (t - 0.5)),
     'accio': lambda t : (-0.3 * math.cos(math.pi * t), -0.25 * math.sin(math.pi * t)),
@@ -192,38 +130,9 @@ SPELL_WAND_PATHS = {
     'obscuro': lambda t : (-0.35 * math.cos(2 * math.pi * (t - 0.1)) if t <= 0.75 else -2 * (t - 0.85),
                            0.35 * math.sin(2 * math.pi * (t - 0.1)) if t <= 0.75 else 2 * (t - 0.85))
 }
-
-SPELL_DESC = {
-    'avada_kedavra': 'instantly kill an opponent piece. killing the king is checkmate.',
-    'accio': 'instantly move a piece one square towards you.',
-    'depulso': 'instantly move a piece one sqaure away from you',
-    'confundus': 'instantly cause an opponent piece to move randomly to an empty square.',
-    'deprimo': 'instantly destroy an empty tile, so it cannot be occupied for the rest of the game.',
-    'reducio': 'shrink an opponent piece. shrunk pieces can move but cannot capture. counter spell for engorgio.',
-    'expelliarmus': 'your opponents next spell will have no effect.',
-    'disillusionment': 'target piece will become invisible for 2 rounds.',
-    'duro': 'target piece cannot move for the next round.',
-    'engorgio': 'enlarge a piece. enlarged pieces can capture an adjacent square. counter spell for reducio.',
-    'fiendfyre': 'capture any piece as long as it is 2 squares away. this piece dies afterwards.',
-    'finite_incantatem': 'general counter spell. remove any spell effect on a piece.',
-    'flipendo': 'instantly move a piece two squares away from you.',
-    'immobulus': 'target piece cannot move for the next 2 rounds.',
-    'petrificus_totalus': 'target piece cannot move for the next 3 rounds.',
-    'fumos': 'target piece will be invisible for the next round.',
-    'cruciatus': 'target piece cannot move for the rest of the game.',
-    'confringo': 'capture any piece so long as it is adjacent.',
-    'impedimenta': 'instantly cause an opponent piece to move randomly one square.',
-    'imperius': 'control the target piece for the next 3 rounds.',
-    'locomotor': 'control the target piece for the next round.',
-    'legilimens': 'reveal all cards in play.',
-    'reparo': 'repair a broken tile.',
-    'prior_incantato': 'use the last spell performed by either side.',
-    'protego': 'shield a piece from the next spell. lasts 3 rounds.',
-    'stupefy': 'quick cast. overcomes protego.',
-    'apparition': 'instantly moves any piece on the board to any empty square.',
-    'revelio': 'reveal your opponents entire hand.',
-    'obscuro': 'opponent cannot see you cast a spell.',
-}
+SPELL_DESC = load_json('./assets/cards/spell_desc.json')
+SPELL_COLORS = load_json('./assets/cards/spell_colors.json')
+SPELL_EFFECTS = load_json('./assets/cards/spell_effects.json')
 
 def draw_wand_path(card: pg.Surface, path: callable):
     width, height = card.get_size()
@@ -266,18 +175,11 @@ class Card:
         self.sparks = Sparks(self.draw_rect.center, self.spell_color)
         self.current_side_up = 0
 
-        self.held = False
-        self.mouse_offset = (0, 0)
-
         # status effects of the card
-        self.card_effect = CARD_EFFECTS[spell]
+        self.card_effect = SPELL_EFFECTS[spell]
     
     def update(self, topleft: tuple[int, int], dt: float):
-        if self.held:
-            self.draw_rect.centerx = pg.mouse.get_pos()[0] - self.mouse_offset[0]
-            self.draw_rect.centery = pg.mouse.get_pos()[1] - self.mouse_offset[1]
-        else:
-            self.draw_rect.left, self.draw_rect.top = topleft
+        self.draw_rect.left, self.draw_rect.top = topleft
 
         self.t += dt
         if self.t > 1:
@@ -285,14 +187,8 @@ class Card:
         new_anchor = trace_wand_path(self.draw_rect, SPELL_WAND_PATHS[self.spell], self.t)
         self.sparks.update(dt, new_anchor)
 
-    def hold(self, mouse: tuple[int, int]):
+    def click(self, mouse: tuple[int, int]) -> bool:
         if self.draw_rect.collidepoint(mouse):
-            self.held = True
-            self.mouse_offset = np.array(mouse) - np.array(self.draw_rect.center)
-
-    def release(self) -> bool:
-        self.held = False
-        if self.draw_rect.top <= 500: 
             return True
         return False
 

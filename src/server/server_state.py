@@ -435,15 +435,11 @@ class HandState:
 
         self.field_effects = field_effects
 
-    def queue_cards(self, p_side: str, cards: list[str]):
+    def queue_cards(self, p_side: str, cards: list[tuple[str, int]]):
         if p_side == 'w':
-            self.white_hand = list(set(self.white_hand).union(set(self.w_queue)))
             self.w_queue = cards
-            self.white_hand = list(set(self.white_hand).difference(set(self.w_queue)))
         else:
-            self.black_hand = list(set(self.black_hand).union(set(self.b_queue)))
             self.b_queue = cards
-            self.black_hand = list(set(self.black_hand).difference(set(self.b_queue)))
 
     def make_card_plays(self):
         self.w_queue = []
