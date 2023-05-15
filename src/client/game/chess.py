@@ -13,7 +13,7 @@ class Board:
         self.black_palette = menu.black_theme
         self.menu = menu
 
-        self.update_board_state(fen_str, occupy)
+        self.update_board_state(fen_str, occupy, (-1, -1))
 
         # board display
         self.board_surf = pg.Surface((TILESIZE * 8, TILESIZE * 8))
@@ -28,10 +28,12 @@ class Board:
         self.held_piece = ''
         self.legal_moves = set()
 
-    def update_board_state(self, fen_str: str, occupy: list[int]):
+    def update_board_state(self, fen_str: str, occupy: list[int], queued_move: tuple[int, int]):
         self.board : list[str] = []
         self.read_fen_str(fen_str)
         self.occupied = set(occupy) # dont even know if i'll need
+
+        self.queued_move = queued_move
 
     def update_legal_moves(self, legal_moves: list[int]):
         self.legal_moves = set(legal_moves)
@@ -59,7 +61,6 @@ class Board:
         # read the fen_str
         data = fen_str.split(' ')
         position = data[0]
-        self.can_move = (data[1] == self.menu.client.p_side)
         self.castling_priv = {
             char: char in data[2] for char in 'KQkq'
         }
@@ -88,7 +89,7 @@ class Board:
                     self.board.append('')
                 square_index += num_empty
 
-    def update(self, events: list[pg.Event]) -> dict:
+    def input(self, events: list[pg.Event]) -> dict:
         req = {}
         for event in events:
             if event.type == pg.MOUSEMOTION:
@@ -104,40 +105,40 @@ class Board:
                 else:
                     self.hovered_square = chunked_x + chunked_y * 8
             if event.type == pg.MOUSEBUTTONDOWN:
-                if self.can_move:
-                    if self.held_piece:
-                        if self.hovered_square in self.legal_moves:
-                            # send data to server to make a move
-                            req = {
-                                'req_type': 'move',
-                                'move': [self.prev_square, self.hovered_square]
-                            }
-                            self.prev_square = -1
-                            self.held_piece = ''
-                            self.legal_moves = set()
-                        else:
-                            self.prev_square = -1
-                            self.held_piece = ''
-                            self.legal_moves = set()
-                    elif self.hovered_square in self.occupied:
-                        # send data to server to retrieve info about legal moves
+                if self.held_piece:
+                    if self.hovered_square in self.legal_moves:
+                        # send data to server to make a move
                         req = {
-                            'req_type': 'pickup',
-                            'square': self.hovered_square
+                            'req_type': 'move_piece',
+                            'p_side': self.menu.p_side,
+                            'move': [self.prev_square, self.hovered_square]
                         }
-                        self.prev_square = self.hovered_square
-                        self.held_piece = self.board[self.hovered_square]
+                        self.prev_square = -1
+                        self.held_piece = ''
+                        self.legal_moves = set()
+                    else:
+                        self.prev_square = -1
+                        self.held_piece = ''
+                        self.legal_moves = set()
+                elif self.hovered_square in self.occupied:
+                    # send data to server to retrieve info about legal moves
+                    req = {
+                        'req_type': 'pickup',
+                        'square': self.hovered_square
+                    }
+                    self.prev_square = self.hovered_square
+                    self.held_piece = self.board[self.hovered_square]
         return req
 
     def render_pieces(self):
         if self.flip:
             for i in range(len(self.board)-1, -1, -1):
                 square = self.board[i]
-                if square and i != self.held_piece:
+                if square and i != self.queued_move[0]:
                     piece = square.lower()
                     x = (i % 8 + 0.5) * TILESIZE + self.board_rect.left
                     y = (7 - i // 8 + 0.85) * TILESIZE + self.board_rect.top
-                    if i == self.hovered_square and self.held_piece == 0:
+                    if i == self.hovered_square:
                         y -= TILESIZE / 2
                     if 'a' <= square and square <= 'z':
                         piece_surf = self.piece_collection[self.black_palette][piece]
@@ -146,7 +147,7 @@ class Board:
                     piece_rect = piece_surf.get_rect()
                     piece_rect.centerx = x
                     piece_rect.bottom = y
-                    if i == self.hovered_square and self.held_piece == 0:
+                    if i == self.hovered_square:
                         shadow = pg.Surface((TILESIZE, TILESIZE))
                         pg.draw.circle(shadow, (50, 50, 50), (TILESIZE/2, TILESIZE/2), 0.35 * TILESIZE)
                         shadow.set_colorkey((0, 0, 0))
@@ -155,13 +156,35 @@ class Board:
                         shadow_rect.centery = y + 0.15 * TILESIZE
                         self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
                     self.display.blit(piece_surf, piece_rect)
+            
+            # queued move
+            if self.queued_move[1] != -1:
+                x = (self.queued_move[1] % 8 + 0.5) * TILESIZE + self.board_rect.left
+                y = (7 - self.queued_move[1] // 8 + 0.85) * TILESIZE + self.board_rect.top - TILESIZE / 2
+                square = self.board[self.queued_move[0]]
+                piece = square.lower()
+                if 'a' <= square and square <= 'z':
+                    piece_surf = self.piece_collection[self.black_palette][piece]
+                else:
+                    piece_surf = self.piece_collection[self.white_palette][piece]
+                piece_rect = piece_surf.get_rect()
+                piece_rect.centerx = x
+                piece_rect.bottom = y
+                shadow = pg.Surface((TILESIZE, TILESIZE))
+                pg.draw.circle(shadow, (50, 50, 50), (TILESIZE/2, TILESIZE/2), 0.35 * TILESIZE)
+                shadow.set_colorkey((0, 0, 0))
+                shadow_rect = shadow.get_rect()
+                shadow_rect.centerx = x
+                shadow_rect.centery = y + 0.15 * TILESIZE
+                self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
+                self.display.blit(piece_surf, piece_rect)
         else:
             for i, square in enumerate(self.board):
-                if square and i != self.held_piece:
+                if square and i != self.queued_move[0]:
                     piece = square.lower()
                     x = (i % 8 + 0.5) * TILESIZE + self.board_rect.left
                     y = (i // 8 + 0.85) * TILESIZE + self.board_rect.top
-                    if i == self.hovered_square and self.held_piece == 0:
+                    if i == self.hovered_square:
                         y -= TILESIZE / 2
                     if 'a' <= square and square <= 'z':
                         piece_surf = self.piece_collection[self.black_palette][piece]
@@ -170,7 +193,7 @@ class Board:
                     piece_rect = piece_surf.get_rect()
                     piece_rect.centerx = x
                     piece_rect.bottom = y
-                    if i == self.hovered_square and self.held_piece == 0:
+                    if i == self.hovered_square:
                         shadow = pg.Surface((TILESIZE, TILESIZE))
                         pg.draw.circle(shadow, (50, 50, 50), (TILESIZE/2, TILESIZE/2), 0.35 * TILESIZE)
                         shadow.set_colorkey((0, 0, 0))
@@ -179,6 +202,28 @@ class Board:
                         shadow_rect.centery = y + 0.15 * TILESIZE
                         self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
                     self.display.blit(piece_surf, piece_rect)
+            
+            # queued move
+            if self.queued_move[1] != -1:
+                x = (self.queued_move[1] % 8 + 0.5) * TILESIZE + self.board_rect.left
+                y = (self.queued_move[1] // 8 + 0.85) * TILESIZE + self.board_rect.top - TILESIZE / 2
+                square = self.board[self.queued_move[0]]
+                piece = square.lower()
+                if 'a' <= square and square <= 'z':
+                    piece_surf = self.piece_collection[self.black_palette][piece]
+                else:
+                    piece_surf = self.piece_collection[self.white_palette][piece]
+                piece_rect = piece_surf.get_rect()
+                piece_rect.centerx = x
+                piece_rect.bottom = y
+                shadow = pg.Surface((TILESIZE, TILESIZE))
+                pg.draw.circle(shadow, (50, 50, 50), (TILESIZE/2, TILESIZE/2), 0.35 * TILESIZE)
+                shadow.set_colorkey((0, 0, 0))
+                shadow_rect = shadow.get_rect()
+                shadow_rect.centerx = x
+                shadow_rect.centery = y + 0.15 * TILESIZE
+                self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
+                self.display.blit(piece_surf, piece_rect)
 
     def render_held_piece(self):
         if self.held_piece:

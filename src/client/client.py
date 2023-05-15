@@ -84,8 +84,14 @@ class Client:
     def create_new_connection(self):
         self.n = Network()
         self.p_side = self.n.get_p()
-        # self.game_id = self.n.get_game_id()
-        self.game_id = -1
+        self.game_id = self.n.get_game_id()
+        # self.game_id = -1
+    
+    def send_req(self, req: dict) -> dict:
+        try:
+            return self.n.send(req)
+        except:
+            return {}
 
     def update(self):
         events = pg.event.get()

@@ -106,7 +106,7 @@ class WaitingRoom:
                 'req_type': 'ready'
             }
             try:
-                res = self.client.n.send(req)
+                res = self.client.send_req(req)
                 if res['game_state']:
                     self.goto = 'game'
                     self.transition_phase = 1
@@ -165,7 +165,11 @@ class GameMenu:
         # chess board
         self.white_theme = 'gryffindor_red'
         self.black_theme = 'slytherin_green'
-    
+
+        #
+        self.current_phase = 0
+        self.can_go = False
+
     def on_load(self):
         self.on_transition()
         
@@ -176,7 +180,7 @@ class GameMenu:
             'req_type': 'board',
             'p_side': self.p_side
         }
-        res = self.client.n.send(req)
+        res = self.client.send_req(req)
         self.board = Board(self, res['board_state'], res['occupy'])
 
         req = {
@@ -184,8 +188,8 @@ class GameMenu:
             'p_side': self.p_side
         }
         res = self.client.n.send(req)
-        self.p_hand = Hand(self.font, res['p_hand'], self.card_collection, self.white_theme)
-        self.o_hand = HiddenHand(res['o_hand'], self.card_collection, self.white_theme)
+        self.p_hand = Hand(self, res['p_hand'])
+        self.o_hand = HiddenHand(self, res['o_hand'])
 
     def on_transition(self):
         # 0 -> no transition
@@ -196,39 +200,96 @@ class GameMenu:
         self.transition_time = 0
     
     def update(self, events: list[pg.Event]):
-        dt = self.clock.get_time() / 1000
-        for event in events:
-            ...
-        
-        # get board state and update
+        # get turn phase, board state, and hand state
         try:
+            req = {
+                'req_type': 'turn',
+                'p_side': self.p_side
+            }
+
+            res = self.client.send_req(req)
+            if res:
+                self.current_phase = res['phase']
+                self.can_go = res['can_go']
+            else:
+                self.goto = 'start'
+                self.transition_phase = 1
+            
             req = {
                 'req_type': 'board',
                 'p_side': self.p_side
             }
-            res = self.client.n.send(req)
+            res = self.client.send_req(req)
             if res:
-                self.board.update_board_state(res['board_state'], res['occupy'])
+                self.board.update_board_state(res['board_state'], res['occupy'], res['queued_move'])
             else:
                 self.goto = 'start'
                 self.transition_phase = 1
-        except:
-            pass
-            
-        # board update for getting legal moves and making moves
-        req = self.board.update(events)
-        if req:
-            try:
-                res = self.client.n.send(req)
-                if res:
-                    self.board.update_legal_moves(res['legal_moves'])
-                else:
-                    self.goto = 'start'
-                    self.transition_phase = 1
-            except:
-                pass
 
-        # hand update
+            req = {
+                'req_type': 'hand',
+                'p_side': self.p_side
+            }
+            res = self.client.n.send(req)
+            if res:
+                self.p_hand.update_hand(res['p_hand'], res['queued'])
+                self.o_hand.update_hand(res['o_hand'])
+            else:
+                self.goto = 'start'
+                self.transition_phase = 1
+        except Exception as e:
+            # pass
+            print(e)
+
+        dt = self.clock.get_time() / 1000
+        for event in events:
+            if event.type == pg.KEYDOWN:
+                if event.key == pg.K_RETURN and self.can_go:
+                    req = {
+                        'req_type': 'end_phase',
+                        'p_side': self.p_side
+                    }
+                    try:
+                        self.client.send_req(req)
+                    except Exception as e:
+                        # pass
+                        print(e)
+        
+        try:
+            inputs = []
+            match self.current_phase:
+                case 0:
+                    if self.can_go:
+                        inputs = ['board', 'hand']
+                case 1:
+                    if self.can_go:
+                        inputs = ['hand']
+            # getting board inputs
+            if 'board' in inputs:                
+                req = self.board.input(events)
+                if req:
+                    res = self.client.send_req(req)
+                    if res:
+                        if req['req_type'] == 'pickup':
+                            self.board.update_legal_moves(res['legal_moves'])
+                        # elif req['req_type'] == 'move_piece':
+                        #     self.board.update_board_state(res['board_state'], res['occupy'])
+                    else:
+                        self.goto = 'start'
+                        self.transition_phase = 1
+                
+            # get hand inputs
+            if 'hand' in inputs:
+                req = self.p_hand.input(events)
+                if req:
+                    res = self.client.send_req(req)
+                    if not res:
+                        self.goto = 'start'
+                        self.transition_phase = 1
+        except Exception as e:
+            # pass
+            print(e)
+
         self.p_hand.update(events, dt)
         self.o_hand.update()
 
@@ -247,13 +308,20 @@ class GameMenu:
     def render(self) -> list[str]:
         self.displays[DEFAULT_DISPLAY].fill((20, 26, 51))
         self.displays[EFFECTS_DISPLAY].fill((0, 0, 0))
-        if self.board.can_move:
-            self.font.render(self.displays[DEFAULT_DISPLAY], 'your turn', self.width/2, 30, 
+        if self.current_phase == 0:
+            self.font.render(self.displays[DEFAULT_DISPLAY], 'main phase', self.width/4, 30, 
                             (255, 255, 255), 25, style='center')
         else:
-            self.font.render(self.displays[DEFAULT_DISPLAY], 'opponents turn', self.width/2, 30, 
+            self.font.render(self.displays[DEFAULT_DISPLAY], 'response phase', self.width/4, 30, 
                             (255, 255, 255), 25, style='center')
         
+        if self.can_go:
+            self.font.render(self.displays[DEFAULT_DISPLAY], 'your turn', self.width*3/4, 30, 
+                            (255, 255, 255), 25, style='center')
+        else:
+            self.font.render(self.displays[DEFAULT_DISPLAY], 'opponents turn', self.width*3/4, 30, 
+                            (255, 255, 255), 25, style='center')
+            
         self.board.render()
         self.p_hand.render(self.displays)
         self.o_hand.render(self.displays[DEFAULT_DISPLAY])
@@ -267,6 +335,7 @@ class GameMenu:
                 transition_in(self.displays[OVERLAY_DISPLAY], self.transition_time)
         
         displays_to_render = [DEFAULT_DISPLAY, EFFECTS_DISPLAY]
+        # displays_to_render = [DEFAULT_DISPLAY]
         if self.transition_phase > 0:
             displays_to_render.append(OVERLAY_DISPLAY)
         return displays_to_render

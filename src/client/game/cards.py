@@ -5,38 +5,80 @@ import math
 from ..vfx.particles import Sparks
 
 class Hand:
-    def __init__(self, font, hand: list[str], card_designs: dict[str, dict[str, pg.Surface]], color_theme: str):
-        self.cards = [Card(font, card_designs, card_name, color_theme) for card_name in hand]
-        self.using = []
+    def __init__(self, menu, hand: list[str]):
+        self.menu = menu
+        self.font = menu.font
+        self.card_designs = menu.card_collection
+        self.color_theme = menu.white_theme
+        self.cards = []
+        self.queue = []
+        self.update_hand(hand, [])
         # a card is a struct specifying a unique id (for reference),
         # a sprite, a descriptions, and some additional data representing
         # card functionality, perhaps a target (which can be a chess piece),
         # a timer (the duration left for the card's effect), an effect key
         # (to keep track of what the effect is), etc...
-        self.card_width = card_designs['gryffindor_gold']['border'].get_width()
-        self.card_height = card_designs['gryffindor_gold']['border'].get_height()
+        self.card_width = self.card_designs['gryffindor_gold']['border'].get_width()
+        self.card_height = self.card_designs['gryffindor_gold']['border'].get_height()
+
+    def update_hand(self, hand: list[str], queue: list[str]):
+        new_hand = [card for card in self.cards if card.spell in hand]
+        [hand.remove(card.spell) for card in new_hand]
+        [new_hand.append(Card(self.font, self.card_designs, spell, self.color_theme)) for spell in hand]
+        self.cards = new_hand
+
+        new_queue = [card for card in self.queue if card.spell in queue]
+        [queue.remove(card.spell) for card in new_queue]
+        [new_queue.append(Card(self.font, self.card_designs, spell, self.color_theme)) for spell in queue]
+        self.queue = new_queue
+
+    def input(self, events: list[pg.Event]) -> dict:
+        req = {}
+        for event in events:
+            if event.type == pg.MOUSEBUTTONUP:
+                # determine which cards were dragged and put them into the using list
+                dragged = [card for card in self.cards if card.release()]
+                # add all of the dragged cards to the queue
+                self.queue = list(set(self.queue).union(set(dragged)))
+                # remove all of the dragged cards to the hand
+                self.cards = list(set(self.cards).difference(set(dragged)))
+                req = {
+                    'req_type': 'play_cards',
+                    'p_side': self.menu.p_side,
+                    'cards': [card.spell for card in self.queue]
+                }
+            if event.type == pg.MOUSEBUTTONDOWN:
+                # begin dragging a card
+                [card.hold(event.pos) for card in self.cards]
+                # # check which cards we want to return to our hand
+                back_to_hand = [card for card in self.queue if card.release()]
+                # add all returned cards to hand
+                self.cards = list(set(self.cards).union(set(back_to_hand)))
+                # remove returned cards from queue
+                self.queue = list(set(self.queue).difference(set(back_to_hand)))
+                req = {
+                    'req_type': 'play_cards',
+                    'p_side': self.menu.p_side,
+                    'cards': [card.spell for card in self.queue]
+                }
+        return req
 
     def update(self, events: list[pg.Event], dt: float):
         for event in events:
             if event.type == pg.MOUSEBUTTONUP:
-                dragged = [card for card in self.cards if card.click(event.pos)]
-                [self.using.append(card) for card in dragged]
-                [self.cards.remove(card) for card in dragged]
-            if event.type == pg.MOUSEBUTTONDOWN:
-                [card.hold(event.pos) for card in self.cards]
-                clicked = [card for card in self.using if card.click(event.pos)]
-                [self.cards.append(card) for card in clicked]
-                [self.using.remove(card) for card in clicked]
+                [card.scroll_card_face(event.pos) for card in self.cards]
+                # [card.scroll_card_face(event.pos) for card in self.using]
         [card.update((self.card_width * (i - len(self.cards) / 2) + 500, 750), dt) for i, card in enumerate(self.cards)]
-        [card.update((self.card_width * (i - len(self.using) / 2) + 500, 450), dt) for i, card in enumerate(self.using)]
+        [card.update((self.card_width * (i - len(self.queue) / 2) + 500, 450), dt) for i, card in enumerate(self.queue)]
 
     def render(self, displays: dict[str, pg.Surface]):
         [card.render(displays) for card in self.cards]
-        [card.render(displays) for card in self.using]
+        [card.render(displays) for card in self.queue]
 
 # this class will allow me to encapsulate some static functionality that i want for a card
 # this dict maps spell names to a parametric function that determines the wand path
 # each card is [name: str, num_moves: int, optional: int]
+# TODO: move these into a .json file
 CARD_EFFECTS = {
     'avada_kedavra': ['death', 1], # literally dies
     'accio': ['move_close', 1, 1], # moves any of your pieces towards you 1 or 2 squares
@@ -248,16 +290,15 @@ class Card:
             self.held = True
             self.mouse_offset = np.array(mouse) - np.array(self.draw_rect.center)
 
-    def click(self, mouse: tuple[int, int]) -> bool:
+    def release(self) -> bool:
         self.held = False
         if self.draw_rect.top <= 500: 
             return True
-        if self.draw_rect.collidepoint(mouse):
-            self.scroll_card_face()
         return False
 
-    def scroll_card_face(self):
-        self.current_side_up = (self.current_side_up + 1) % 2
+    def scroll_card_face(self, mouse: tuple[int, int]):
+        if self.draw_rect.collidepoint(mouse):
+            self.current_side_up = (self.current_side_up + 1) % 2
 
     def render(self, displays: dict[str, pg.Surface]):
         displays['default'].blit(self.card_faces[self.current_side_up], self.draw_rect)
@@ -265,10 +306,16 @@ class Card:
             self.sparks.render(displays['gaussian_blur'])
 
 class HiddenHand:
-    def __init__(self, hand_size: int, card_designs: dict[str, dict[str, pg.Surface]], color_theme: str):
-        self.cards = [HiddenCard(card_designs, color_theme) for i in range(hand_size)]
-        self.card_width = card_designs['gryffindor_gold']['border'].get_width()
-        self.card_height = card_designs['gryffindor_gold']['border'].get_height()
+    def __init__(self, menu, hand_size: int):
+        self.card_designs = menu.card_collection
+        self.color_theme = menu.white_theme
+        self.cards = []
+        self.update_hand(hand_size)
+        self.card_width = self.card_designs['gryffindor_gold']['border'].get_width()
+        self.card_height = self.card_designs['gryffindor_gold']['border'].get_height()
+
+    def update_hand(self, hand_size: int):
+        self.cards = [HiddenCard(self.card_designs, self.color_theme) for _ in range(hand_size)]
 
     def update(self):
         [self.cards[i].update((self.card_width * (i - len(self.cards) / 2) + 500, 0)) for i in range(len(self.cards))]
