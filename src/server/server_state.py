@@ -30,7 +30,7 @@ class FieldEffectsState:
 WHITE_PIECES = 'PNBRQK'
 BLACK_PIECES = 'pnbrqk'
 STARTING_FEN_STR = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -1 0 1'
-SIDE_MAP = {'w': 1, 'b': -1}
+SIDE_MAP = {'w': 0, 'b': 1}
 
 def is_sliding_piece(piece: str) -> bool:
     if piece in 'brq':
@@ -201,26 +201,25 @@ PIECE_OFFSETS = {
 
 class BoardState:
     def __init__(self, field_effects: FieldEffectsState, fen_str: str=STARTING_FEN_STR):
+        # store the board state and occupied squares of either white or black
         self.board : list[str] = []
         self.white_occupied = set()
         self.black_occupied = set()
         self.on_start(fen_str)
 
-        self.field_effects = field_effects
+        # store the next move to be played once the round ends
+        self.queued_move = [-1, -1]
 
-        # these might not be need to be stored permanently
-        # can be calculated and returned when the player requests
-        self.valid_moves = set()
-        self.checked_squares = set()
+        self.field_effects = field_effects
     
-    def on_start(self, fen_str):
+    def on_start(self, fen_str: str):
         # read the fen_str
         data = fen_str.split(' ')
-        position = data[0]
-        self.move = SIDE_MAP[data[1]]
+        position = data[0] # fen string
+        self.move = SIDE_MAP[data[1]] # who is the leading player in the round
         self.castling_priv = {
             char: char in data[2] for char in 'KQkq'
-        }
+        } 
         self.en_passant = int(data[3])
         self.half_moves = int(data[4])
         self.full_moves = int(data[5])
@@ -268,7 +267,7 @@ class BoardState:
         fen_str += ' '
         
         # which move
-        fen_str += 'w ' if self.move == 1 else 'b '
+        fen_str += 'w ' if self.move == 0 else 'b '
 
         # castling privileges
         for castle in self.castling_priv:
@@ -287,13 +286,16 @@ class BoardState:
 
         return fen_str
 
-    def make_board_move(self, move: list[int, int]):
-        old_square = move[0]
-        new_square = move[1]
+    def make_board_move(self) -> bool:
+        old_square = self.queued_move[0]
+        new_square = self.queued_move[1]
+
+        if old_square == -1 or new_square == -1:
+            return False
         moved_piece = self.board[old_square]
 
         # update occupations
-        if self.move == 1:
+        if self.move == 0:
             self.white_occupied.remove(old_square)
             self.white_occupied.add(new_square)
             if new_square in self.black_occupied:
@@ -313,7 +315,7 @@ class BoardState:
         self.en_passant = -1
         if moved_piece in 'Pp':
             if new_square == en_passant: # en passant capture
-                if self.move == 1:
+                if self.move == 0:
                     self.black_occupied.remove(en_passant + 8)
                     self.field_effects.update_field_effects(en_passant + 8, [])
                 else:
@@ -327,11 +329,11 @@ class BoardState:
         
         # castling
         if moved_piece in 'Kk':
-            self.king_positions[int((1 - self.move) / 2)] = new_square
+            self.king_positions[self.move] = new_square
             if new_square - old_square == 2: # kingside castle
                 self.board[new_square - 1] = self.board[new_square + 1]
                 self.board[new_square + 1] = 0
-                if self.move == 1:
+                if self.move == 0:
                     self.white_occupied.add(new_square - 1)
                     self.white_occupied.remove(new_square + 1)
                 else:
@@ -343,7 +345,7 @@ class BoardState:
             elif old_square - new_square == 2: # queenside castle
                 self.board[new_square + 1] = self.board[new_square - 2]
                 self.board[new_square - 2] = 0 
-                if self.move == 1:
+                if self.move == 0:
                     self.white_occupied.add(new_square + 1)
                     self.white_occupied.remove(new_square - 2)
                 else:
@@ -352,7 +354,7 @@ class BoardState:
                 self.field_effects.update_field_effects(new_square + 1, self.field_effects.get_field_effects(new_square - 2))
                 self.field_effects.update_field_effects(new_square - 2, [])
             # remove castling privileges
-            if self.move == 1:
+            if self.move == 0:
                 self.castling_priv['K'] = False
                 self.castling_priv['Q'] = False
             else:
@@ -372,7 +374,12 @@ class BoardState:
         
         self.board[new_square] = moved_piece
         self.board[old_square] = 0
-        self.move *= -1
+        self.queued_move = [-1, -1]
+        self.move = (self.move + 1) % 2
+        self.full_moves += self.half_moves
+        self.half_moves = self.move
+
+        return True
 
     def pickup_piece(self, square: int) -> set[int]:
         piece = self.board[square]
@@ -386,7 +393,7 @@ class BoardState:
 
             # check capture and remove occupations
             if board_cp[pl_move] != 0:
-                if self.move == 1:
+                if self.move == 0:
                     black_occupied_cp.remove(pl_move)
                 else:
                     white_occupied_cp.remove(pl_move)
@@ -397,22 +404,25 @@ class BoardState:
             # en passant capture
             if piece in 'Pp':
                 if pl_move == self.en_passant:
-                    if self.move == 1:
+                    if self.move == 0:
                         black_occupied_cp.remove(self.en_passant + 8)
                     else:
                         white_occupied_cp.remove(self.en_passant - 8)
             
-            attacked_squares = get_attacked_squares(board_cp, black_occupied_cp if self.move == 1 else white_occupied_cp)
+            attacked_squares = get_attacked_squares(board_cp, black_occupied_cp if self.move == 0 else white_occupied_cp)
             if piece in 'Kk':
                 king_pos = pl_move
             else:
-                king_pos = self.king_positions[int((1 - self.move) / 2)]
+                king_pos = self.king_positions[self.move]
             if king_pos in attacked_squares:
                 illegal_moves.add(pl_move)
         
         legal_moves = pseudo_legal_moves.difference(illegal_moves)
         return legal_moves
-                 
+
+    def queue_move(self, move: tuple[int, int]):
+        self.queued_move = move
+
 class HandState:
     def __init__(self, field_effects: FieldEffectsState):
         # each hand is represented by a list of
@@ -420,27 +430,35 @@ class HandState:
         self.white_hand = ['cruciatus', 'confringo', 'impedimenta', 'imperius']
         self.black_hand = ['locomotor', 'legilimens', 'reparo', 'prior_incantato']
 
-        self.field_effects = field_effects
-    
-    def make_card_play(self, play: list[str, str, int]):
-        p_side = play[0]
-        card_id = play[1]
-        target = play[2]
+        self.w_queue = []
+        self.b_queue = []
 
+        self.field_effects = field_effects
+
+    def queue_cards(self, p_side: str, cards: list[str]):
         if p_side == 'w':
-            self.white_hand.remove(card_id)
+            self.white_hand = list(set(self.white_hand).union(set(self.w_queue)))
+            self.w_queue = cards
+            self.white_hand = list(set(self.white_hand).difference(set(self.w_queue)))
         else:
-            self.black_hand.remove(card_id)
-        self.field_effects.update_field_effects(target, [card_id], func='add')
+            self.black_hand = list(set(self.black_hand).union(set(self.b_queue)))
+            self.b_queue = cards
+            self.black_hand = list(set(self.black_hand).difference(set(self.b_queue)))
+
+    def make_card_plays(self):
+        self.w_queue = []
+        self.b_queue = []
 
     def get_hands_data(self, p_side: str) -> dict:
         if p_side == 'w':
             return {
                 'p_hand': self.white_hand,
-                'o_hand': len(self.black_hand)
+                'o_hand': len(self.black_hand),
+                'queued': self.w_queue
             }
         else:
             return {
                 'p_hand': self.black_hand,
-                'o_hand': len(self.white_hand)
+                'o_hand': len(self.white_hand),
+                'queued': self.b_queue
             }

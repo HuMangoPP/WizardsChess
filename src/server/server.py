@@ -34,34 +34,54 @@ def threaded_client(conn: socket.socket, p: str, game_id: int):
                 
                 if req:
                     match req['req_type']:
-                        case 'board':
-                            reply = {
-                                'board_state': game.get_board_state(),
-                                'ffx_state': game.get_ffx_state(),
-                                'occupy': game.get_occupation(req['p_side'])
-                            }
-                        case 'pickup':
-                            legal_moves = game.get_legal_moves(req['square'])
-                            reply = {
-                                'legal_moves': legal_moves
-                            }
-                        case 'move':
-                            game.make_move(req['move'])
-                            reply = {'res': True}
                         case 'ready':
                             reply = {
                                 'game_state': game.is_ready()
                             }
+                        case 'turn':
+                            # this returns the current phase of the turn
+                            # main phase, response phase, resolve phase, ...
+                            reply = game.get_turn_phase(req['p_side'])
+                        case 'board':
+                            # this returns the current board state, which is the fen string
+                            # and the field effects
+                            reply = {
+                                'board_state': game.get_board_state(),
+                                'occupy': game.get_occupation(req['p_side']),
+                                'queued_move': game.get_queued_move()
+                            }
                         case 'hand':
+                            # this returns the current hand states, including the players hand
+                            # and the opponents hand
                             reply = game.get_hand_state(req['p_side'])
-                        case 'play_card':
-                            game.play_card(req['card_play'])
-                            reply = {'res': True}
+                        case 'pickup':
+                            # this returns the legal moves for this players pieces
+                            reply = {
+                                'legal_moves': game.get_legal_moves(req['square'])
+                            }
+                        case 'move_piece':
+                            game.queue_move(req['move'])
+                            reply = {
+                                'board_state': game.get_board_state(),
+                                'occupy': game.get_occupation(req['p_side']),
+                                'queued_move': game.get_queued_move()
+                            }
+                        case 'play_cards':
+                            game.queue_cards(req['p_side'], req['cards'])
+                            reply = game.get_hand_state(req['p_side'])
+                        case 'end_phase':
+                            game.end_phase()
+                            reply = {
+                                'board_state': game.get_board_state(),
+                                'occupy': game.get_occupation(req['p_side']),
+                                'queued_move': game.get_queued_move()
+                            }
                 reply = json.dumps(reply)
                 conn.sendall(str.encode(reply))
             else:
                 break
         except Exception as e:
+            print(e)
             break
 
     print('lost connection')
