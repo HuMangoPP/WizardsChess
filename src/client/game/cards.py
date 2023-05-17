@@ -132,7 +132,6 @@ SPELL_WAND_PATHS = {
 }
 SPELL_DESC = load_json('./assets/cards/spell_desc.json')
 SPELL_COLORS = load_json('./assets/cards/spell_colors.json')
-SPELL_EFFECTS = load_json('./assets/cards/spell_effects.json')
 
 def draw_wand_path(card: pg.Surface, path: callable):
     width, height = card.get_size()
@@ -174,9 +173,6 @@ class Card:
         self.spell_color = SPELL_COLORS[spell]
         self.sparks = Sparks(self.draw_rect.center, self.spell_color)
         self.current_side_up = 0
-
-        # status effects of the card
-        self.card_effect = SPELL_EFFECTS[spell]
     
     def update(self, topleft: tuple[int, int], dt: float):
         self.draw_rect.left, self.draw_rect.top = topleft

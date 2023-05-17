@@ -1,3 +1,4 @@
+import json, random
 
 class FieldEffectsState:
     def __init__(self):
@@ -6,6 +7,8 @@ class FieldEffectsState:
         # and each element is a list of strings which is the
         # effect_id (name)
         self.effects = []
+        self.w_effects = []
+        self.b_effects = []
         self.on_start()
     
     def on_start(self):
@@ -26,6 +29,33 @@ class FieldEffectsState:
                 [self.effects[square].remove(new_effect) for new_effect in new_effects]
             case 'write':
                 self.effects[square] = new_effects
+
+    def update_side_effects(self, p_side: str, new_effects: list[str], func='write'):
+        if p_side == 'w':
+            match func:
+                case 'add':
+                    [self.w_effects.append(new_effect) for new_effect in new_effects]
+                case 'del':
+                    [self.w_effects.remove(new_effect) for new_effect in new_effects]
+                case 'write':
+                    self.w_effects = new_effects
+        else:
+            match func:
+                case 'add':
+                    [self.b_effects.append(new_effect) for new_effect in new_effects]
+                case 'del':
+                    [self.b_effects.remove(new_effect) for new_effect in new_effects]
+                case 'write':
+                    self.b_effects = new_effects
+
+    def cooldown_effects(self):
+        for square, effects in enumerate(self.effects):
+            for effect in effects:
+                self.update_field_effects(square, [effect], func='del')
+                if effect[1] > 0:
+                    self.update_field_effects(square, [(effect[0], effect[1] - 1)], func='add')
+
+    
 
 WHITE_PIECES = 'PNBRQK'
 BLACK_PIECES = 'pnbrqk'
@@ -293,6 +323,8 @@ class BoardState:
         if old_square == -1 or new_square == -1:
             return False
         moved_piece = self.board[old_square]
+        if not moved_piece:
+            return False
 
         # update occupations
         if self.move == 0:
@@ -381,6 +413,23 @@ class BoardState:
 
         return True
 
+    def displace_piece(self, displacement: tuple[int, int]):
+        old_square = displacement[0]
+        new_square = displacement[1]
+        # random move
+        if new_square == -1:
+            offsets = []
+            for offset in [[-1, -1], [0, -1], [1, -1], [-1, 0], [0, 1], [-1, 1], [0, 1], [1, 1]]:
+                x, y = old_square % 8 + offset[0], old_square // 8 + offset[1]
+                if (0 <= x and x < 8) and (0 <= y and y < 8):
+                    offsets.append(x + y * 8)
+            offsets = [offset for offset in offsets if self.board[offset] == 0]
+            new_square = random.choice(offsets)
+        self.board[new_square] = self.board[old_square]
+        self.board[old_square] = 0
+        self.field_effects.update_field_effects(new_square, self.field_effects.get_field_effects(old_square))
+        self.field_effects.update_field_effects(old_square, [])
+
     def pickup_piece(self, square: int) -> set[int]:
         piece = self.board[square]
         pseudo_legal_moves = get_piece_moves(self.board, piece, square, self.en_passant, self.castling_priv)
@@ -423,25 +472,190 @@ class BoardState:
     def queue_move(self, move: tuple[int, int]):
         self.queued_move = move
 
+    def resolve_effects(self):
+        for square, effects in enumerate(self.field_effects.get_entire_field()):
+            for effect in effects:
+                match effect[0]:
+                    case 'death':
+                        self.field_effects.update_field_effects(square, [])
+                        self.board[square] = 0
+                    case 'area_attack':
+                        offsets = []
+                        for offset in [[-1, -1], [0, -2], [1, -1], [2, 0], [1, 1], [0, 1], [-1, 1], [-2, 0]]:
+                            x = square % 8 + offset[0]
+                            y = square // 8 + offset[1]
+                            if (0 <= x and x < 7) and (0 <= y and y < 7):
+                                offsets.append(x + y * 8)
+                        if self.move == 0:
+                            offsets = [offset for offset in offsets if (offset in self.black_occupied)]
+                        else:
+                            offsets = [offset for offset in offsets if (offset in self.white_occupied)]
+                        if offsets:
+                            attacked_square = random.choice(offsets)
+                            self.field_effects.update_field_effects(attacked_square, [])
+                            self.board[attacked_square] = 0
+                        if effects[1] == 0:
+                            self.field_effects.update_field_effects(square, [])
+                            self.board[square] = 0
+
 class HandState:
-    def __init__(self, field_effects: FieldEffectsState):
+    def __init__(self, field_effects: FieldEffectsState, board_state: BoardState):
         # each hand is represented by a list of
         # strings, each of which is a card_id (name)
         self.white_hand = ['cruciatus', 'confringo', 'impedimenta', 'imperius']
         self.black_hand = ['locomotor', 'legilimens', 'reparo', 'prior_incantato']
-
+        with open('./assets/spell_effects.json') as f:
+            self.spell_effects = json.load(f)
         self.w_queue = []
         self.b_queue = []
+        self.queued_displacements = []
 
         self.field_effects = field_effects
+        self.board_state = board_state
 
     def queue_cards(self, p_side: str, cards: list[tuple[str, int]]):
         if p_side == 'w':
             self.w_queue = cards
         else:
             self.b_queue = cards
+        self.instant_cast(p_side)
+        self.project_quick_cast(p_side)
 
-    def make_card_plays(self):
+    def instant_cast(self, p_side: str):
+        if p_side == 'w':
+            recent_card_play = self.w_queue[-1]
+            card_effects = self.spell_effects[recent_card_play[0]]
+            if card_effects[1] == 0:
+                if card_effects[0] == 'remove':
+                    self.field_effects.update_field_effects(recent_card_play[1], [])
+                else:
+                    self.field_effects.update_side_effects('w', [card_effects[0]], func='add')
+                self.w_queue.pop()
+        else:
+            recent_card_play = self.b_queue[-1]
+            card_effects = self.spell_effects[recent_card_play[0]]
+            if card_effects[1] == 0:
+                if card_effects[0] == 'remove':
+                    self.field_effects.update_field_effects(recent_card_play[1], [])
+                else:
+                    self.field_effects.update_side_effects('b', [card_effects[0]], func='add')
+                self.b_queue.pop()  
+
+    def project_w_quick_cast(self):
+        for card_play in self.w_queue:
+            card_effect = self.spell_effects[card_play[0]]
+            if card_effect[1] != 1:
+                continue
+            target = card_play[1]
+            effect_name = card_effect[0]
+            match effect_name:
+                case 'move_back':
+                    strength = card_effect[3]
+                    self.queued_displacements.append((target, target + strength * 8))
+                case 'move_forward':
+                    strength = card_effect[3]
+                    self.queued_displacements.append((target, target - strength * 8))
+                case 'move_random':
+                    self.queued_displacements.append((target, -1))
+                case 'move_anywhere':
+                    self.queued_displacements.append((target, card_play[2]))
+
+    def project_b_quick_cast(self):
+        for card_play in self.b_queue:
+            card_effect = self.spell_effects[card_play[0]]
+            if card_effect[1] != 1:
+                continue
+            target = card_play[1]
+            effect_name = card_effect[0]
+            match effect_name:
+                case 'move_back':
+                    strength = card_effect[3]
+                    self.queued_displacements.append((target, target - strength * 8))
+                case 'move_forward':
+                    strength = card_effect[3]
+                    self.queued_displacements.append((target, target + strength * 8))
+                case 'move_random':
+                    self.queued_displacements.append((target, -1))
+                case 'move_anywhere':
+                    self.queued_displacements.append((target, card_play[2]))
+
+    def project_quick_cast(self, p_side: str):
+        self.queued_displacements = []
+        if p_side == 'w':
+            self.project_w_quick_cast()
+            self.project_b_quick_cast()
+        else:
+            self.project_b_quick_cast()
+            self.project_w_quick_cast()
+
+    def w_normal_cast(self):
+        for card_play in self.w_queue:
+            card_effect = self.spell_effects[card_play[0]]
+            if card_effect[1] != 2:
+                continue
+            target = card_play[1]
+            effect_name = card_effect[0]
+            self.field_effects.update_field_effects(target, [effect_name], func='add')        
+    
+    def b_normal_cast(self):
+        for card_play in self.w_queue:
+            card_effect = self.spell_effects[card_play[0]]
+            if card_effect[1] != 2:
+                continue
+            target = card_play[1]
+            effect_name = card_effect[0]
+            self.field_effects.update_field_effects(target, [effect_name], func='add')        
+
+    def normal_cast(self, p_side: str):
+        if p_side == 'w':
+            self.w_normal_cast()
+            self.b_normal_cast()
+        else:
+            self.b_normal_cast()
+            self.w_normal_cast()
+
+    def resolve_turn(self):
+        if self.board_state.move == 0:
+            first_quick = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 1]
+            second_quick = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 1]
+            first_normal = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 2]
+            second_normal = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 2]
+        else:
+            first_quick = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 1]
+            second_quick = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 1]
+            first_normal = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 2]
+            second_normal = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 2]
+
+        for card_play in first_quick:
+            card = card_play[0]
+            target = card_play[1]
+            effect_name = self.spell_effects[card][0]
+            cd = self.spell_effects[card][2]
+            self.field_effects.update_field_effects(target, [(effect_name, cd)])
+        for card_play in second_quick:
+            card = card_play[0]
+            target = card_play[1]
+            effect_name = self.spell_effects[card][0]
+            self.field_effects.update_field_effects(target, [(effect_name, cd)])
+    
+        for displacement in self.queued_displacements:
+            self.board_state.displace_piece(displacement)
+        self.board_state.make_board_move()
+
+        for card_play in first_normal:
+            card = card_play[0]
+            target = card_play[1]
+            effect_name = self.spell_effects[card][0]
+            self.field_effects.update_field_effects(target, [(effect_name, cd)])
+        for card_play in second_normal:
+            card = card_play[0]
+            target = card_play[1]
+            effect_name = self.spell_effects[card][0]
+            self.field_effects.update_field_effects(target, [(effect_name, cd)])
+
+        self.board_state.resolve_effects()
+        self.field_effects.cooldown_effects()
+
         self.w_queue = []
         self.b_queue = []
 

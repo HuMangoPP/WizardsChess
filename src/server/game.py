@@ -59,8 +59,7 @@ class Game:
 
     def end_phase(self):
         if self.current_phase == 1:
-            if self.board_state.make_board_move():
-                self.hand_state.make_card_plays()
+            self.hand_state.resolve_turn()
         self.current_phase = (self.current_phase + 1) % 2
 
     def is_ready(self):
