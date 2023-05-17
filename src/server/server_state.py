@@ -595,7 +595,7 @@ class HandState:
                 if offsets:
                     valid_squares.add(square)
             return valid_squares
-        return set()
+        return set(range(64))
 
     def queue_cards(self, p_side: str, cards: list[tuple[str, int]]):
         if p_side == 'w':

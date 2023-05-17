@@ -27,6 +27,7 @@ class Board:
         self.prev_square = -1
         self.held_piece = ''
         self.legal_moves = set()
+        self.spell_targets = set()
 
     def update_board_state(self, fen_str: str, occupy: list[int], queued_move: tuple[int, int]):
         self.board : list[str] = []
@@ -240,14 +241,6 @@ class Board:
             piece_rect.bottom = y
 
             self.display.blit(piece_surf, piece_rect)
-
-    # def render_checked_squares(self):
-    #     if self.checked_squares:
-    #         for checked_square in self.checked_squares:
-    #             x = checked_square % 8 * TILESIZE + self.board_rect.left
-    #             y = checked_square // 8 * TILESIZE + self.board_rect.top
-    #             pg.draw.rect(self.display, (0, 0, 0), 
-    #                          pg.Rect(x, y, TILESIZE, TILESIZE))
                 
     def render_legal_moves(self):
         if self.legal_moves:
@@ -261,6 +254,21 @@ class Board:
                 for legal_move in self.legal_moves:
                     x = legal_move % 8 * TILESIZE + self.board_rect.left
                     y = legal_move // 8 * TILESIZE + self.board_rect.top
+                    pg.draw.rect(self.display, (255, 255, 255),
+                                pg.Rect(x, y, TILESIZE, TILESIZE))
+
+    def render_spell_targets(self):
+        if self.spell_targets:
+            if self.flip:
+                for spell_target in self.spell_targets:
+                    x = spell_target % 8 * TILESIZE + self.board_rect.left
+                    y = (7 - spell_target // 8) * TILESIZE + self.board_rect.top
+                    pg.draw.rect(self.display, (255, 255, 255),
+                                pg.Rect(x, y, TILESIZE, TILESIZE))
+            else:
+                for spell_target in self.spell_targets:
+                    x = spell_target % 8 * TILESIZE + self.board_rect.left
+                    y = spell_target // 8 * TILESIZE + self.board_rect.top
                     pg.draw.rect(self.display, (255, 255, 255),
                                 pg.Rect(x, y, TILESIZE, TILESIZE))
 

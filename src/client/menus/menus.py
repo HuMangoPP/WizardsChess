@@ -283,7 +283,11 @@ class GameMenu:
                 req = self.p_hand.input(events)
                 if req:
                     res = self.client.send_req(req)
-                    if not res:
+                    if res:
+                        if req['req_type'] == 'cast_spell':
+                            self.p_hand.valid_targets = set(res['valid_targets'])
+                            self.board.spell_targets = set(res['valid_targets'])
+                    else:
                         self.goto = 'start'
                         self.transition_phase = 1
         except Exception as e:

@@ -21,6 +21,7 @@ class Hand:
         self.card_height = self.card_designs['gryffindor_gold']['border'].get_height()
 
         self.new_card_in_queue = None
+        self.valid_targets = set()
 
     def update_hand(self, hand: list[str], queue: list[tuple[str, int]]):
         new_hand = [card for card in self.cards if card.spell in hand]
@@ -46,14 +47,17 @@ class Hand:
                         chunked_y = zeroed_y // TILESIZE
                     if (0 <= chunked_x and chunked_x < 8) and (0 <= chunked_y and chunked_y < 8):
                         target = chunked_x + chunked_y * 8
-                        new_card_play = [self.new_card_in_queue, target]
-                        self.queue.append(new_card_play)
-                        req = {
-                            'req_type': 'play_cards',
-                            'p_side': self.menu.p_side,
-                            'cards': [[card[0].spell, card[1]] for card in self.queue],
-                        }
+                        if target in self.valid_targets:
+                            new_card_play = [self.new_card_in_queue, target]
+                            self.queue.append(new_card_play)
+                            req = {
+                                'req_type': 'play_cards',
+                                'p_side': self.menu.p_side,
+                                'cards': [[card[0].spell, card[1]] for card in self.queue],
+                            }
                     self.new_card_in_queue = None
+                    self.valid_targets = set()
+                    self.menu.board.spell_targets = set()
                     
                 else:
                     # get the card in the hand that was clicked
@@ -61,8 +65,12 @@ class Hand:
                     to_queue = [card for card in self.cards if card.click(event.pos) and card not in card_queue]
                     if to_queue:
                         self.new_card_in_queue = to_queue[0]
-
-                    # get the indices in queue that are to be returned
+                    req = {
+                        'req_type': 'cast_spell',
+                        'p_side': self.menu.p_side,
+                        'card': self.new_card_in_queue.spell
+                    }
+                    # get the indices in queue that are to be returned to hand
                     to_hand = {i for i, card in enumerate(self.queue) if card[0].click(event.pos)}
                     [self.queue.pop(i) for i in to_hand]
                 
