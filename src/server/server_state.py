@@ -48,6 +48,14 @@ class FieldEffectsState:
                 case 'write':
                     self.b_effects = new_effects
 
+    def check_counter_spells(self):
+        for square, effects in self.effects:
+            effect_names = set([effect[0] for effect in effects])
+            if 'repair' in effect_names and 'remove_square' in effect_names:
+                self.update_field_effects(square, [effect for effect in effects if effect[0] in ['repair', 'remove_square']], func='del')
+            if 'shrink' in effect_names and 'grow' in effect_names:
+                self.update_field_effects(square, [effect for effect in effects if effect[0] in ['shrink', 'grow']], func='del')
+
     def cooldown_effects(self):
         for square, effects in enumerate(self.effects):
             for effect in effects:
@@ -55,7 +63,6 @@ class FieldEffectsState:
                 if effect[1] > 0:
                     self.update_field_effects(square, [(effect[0], effect[1] - 1)], func='add')
 
-    
 
 WHITE_PIECES = 'PNBRQK'
 BLACK_PIECES = 'pnbrqk'
@@ -432,6 +439,10 @@ class BoardState:
 
     def pickup_piece(self, square: int) -> set[int]:
         piece = self.board[square]
+        effects = set(self.field_effects.get_field_effects(square))
+        if 'cannot_move' in effects:
+            return set()
+        
         pseudo_legal_moves = get_piece_moves(self.board, piece, square, self.en_passant, self.castling_priv)
         illegal_moves = set()
         for pl_move in pseudo_legal_moves:
@@ -652,6 +663,8 @@ class HandState:
             target = card_play[1]
             effect_name = self.spell_effects[card][0]
             self.field_effects.update_field_effects(target, [(effect_name, cd)])
+
+        self.field_effects.check_counter_spells()
 
         self.board_state.resolve_effects()
         self.field_effects.cooldown_effects()

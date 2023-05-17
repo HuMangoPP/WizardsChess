@@ -37,7 +37,18 @@ class Game:
         return self.board_state.get_fen_str()
 
     def get_occupation(self, p_side: str):
-        return list(self.board_state.white_occupied) if p_side == 'w' else list(self.board_state.black_occupied)
+        if p_side == 'w':
+            occupation = set([square for square in self.board_state.white_occupied
+                              if 'control' not in set(self.ffx_state.get_field_effects(square))])
+            occupation = occupation.union(set([square for square in self.board_state.black_occupied
+                                               if 'control' in set(self.ffx_state.get_field_effects(square))]))
+            return occupation
+        else:
+            occupation = set([square for square in self.board_state.black_occupied
+                              if 'control' not in set(self.ffx_state.get_field_effects(square))])
+            occupation = occupation.union(set([square for square in self.board_state.white_occupied
+                                               if 'control' in set(self.ffx_state.get_field_effects(square))]))
+            return occupation
 
     def get_legal_moves(self, square: int):
         return list(self.board_state.pickup_piece(square))
