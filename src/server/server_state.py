@@ -524,6 +524,79 @@ class HandState:
         self.field_effects = field_effects
         self.board_state = board_state
 
+    def begin_cast(self, p_side: str, card: str) -> set[int]:
+        # first do instant casts
+        effect_name = self.spell_effects[card][0]
+        priority = self.spell_effects[card][1]
+        if priority == 0:
+            return
+        
+        if effect_name in ['remove', 'repair']:
+            return self.board_state.white_occupied.union(self.board_state.black_occupied)
+        elif effect_name in ['move_forward']:
+            strength = self.spell_effects[card][3]
+            squares = self.board_state.white_occupied.union(self.board_state.black_occupied)
+            invalid_squares = set()
+            if p_side == 'w':
+                for square in squares:
+                    y = square // 8 - 8 * strength
+                    if y < 0 or any(self.board_state.board[square // 8 - 8 * i] != 0 for i in range(1, strength+1)):
+                        invalid_squares.add(square)
+                return squares.difference(invalid_squares)
+            else:
+                for square in squares:
+                    y = square // 8 + 8 * strength
+                    if y >= 8 or any(self.board_state.board[square // 8 + 8 * i] != 0 for i in range(1, strength+1)):
+                        invalid_squares.add(square)
+                return squares.difference(invalid_squares)
+        elif effect_name in ['move_back']:
+            strength = self.spell_effects[card][3]
+            squares = self.board_state.white_occupied.union(self.board_state.black_occupied)
+            invalid_squares = set()
+            if p_side == 'b':
+                for square in squares:
+                    y = square // 8 - 8 * strength
+                    if y < 0 or any(self.board_state.board[square // 8 - 8 * i] != 0 for i in range(1, strength+1)):
+                        invalid_squares.add(square)
+                return squares.difference(invalid_squares)
+            else:
+                for square in squares:
+                    y = square // 8 + 8 * strength
+                    if y >= 8 or any(self.board_state.board[square // 8 + 8 * i] != 0 for i in range(1, strength+1)):
+                        invalid_squares.add(square)
+                return squares.difference(invalid_squares)
+        elif effect_name in ['remove_square']:
+            return set(range(64)).difference(self.board_state.white_occupied.union(self.board_state.black_occupied))
+        elif effect_name in ['area_attack', 'shield', 'grow']:
+            if p_side == 'w':
+                return self.board_state.white_occupied
+            else:
+                return self.board_state.black_occupied
+        elif effect_name in ['control', 'death', 'cannot_move', 'shrink']:
+            if p_side == 'b':
+                return self.board_state.white_occupied
+            else:
+                return self.board_state.black_occupied
+        elif effect_name in ['move_anywhere']:
+            if p_side == 'w':
+                return set(range(64)).difference(self.board_state.black_occupied)
+            else:
+                return set(range(64)).difference(self.board_state.white_occupied)
+        elif effect_name in ['move_random']:
+            squares = self.board_state.white_occupied.union(self.board_state.black_occupied)
+            valid_squares = set()
+            for square in squares:
+                offsets = []
+                for offset in [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]:
+                    x = square % 8 + offset[0]
+                    y = square // 8 + offset[1]
+                    if (0 <= x and x < 8) and (0 <= y and y < 8) and self.board_state.board[x + y * 8] == 0:
+                        offsets.append(x + y * 8)
+                if offsets:
+                    valid_squares.add(square)
+            return valid_squares
+        return set()
+
     def queue_cards(self, p_side: str, cards: list[tuple[str, int]]):
         if p_side == 'w':
             self.w_queue = cards

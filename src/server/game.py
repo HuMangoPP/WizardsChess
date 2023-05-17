@@ -68,6 +68,9 @@ class Game:
     def queue_cards(self, p_side: str, cards: list[str]):
         self.hand_state.queue_cards(p_side, cards)
 
+    def cast_spell(self, p_side: str, card: str):
+        return list(self.hand_state.begin_cast(p_side, card))
+
     def end_phase(self):
         if self.current_phase == 1:
             self.hand_state.resolve_turn()
