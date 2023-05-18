@@ -7,7 +7,7 @@ class Game:
         self.id = id
         self.ffx_state = FieldEffectsState()
         self.board_state = BoardState(self.ffx_state)
-        self.hand_state = HandState(self.ffx_state)
+        self.hand_state = HandState(self.ffx_state, self.board_state)
 
         self.current_phase = 0
         self.phase_fulfilled = 0
@@ -42,13 +42,13 @@ class Game:
                               if 'control' not in set(self.ffx_state.get_field_effects(square))])
             occupation = occupation.union(set([square for square in self.board_state.black_occupied
                                                if 'control' in set(self.ffx_state.get_field_effects(square))]))
-            return occupation
+            return list(occupation)
         else:
             occupation = set([square for square in self.board_state.black_occupied
                               if 'control' not in set(self.ffx_state.get_field_effects(square))])
             occupation = occupation.union(set([square for square in self.board_state.white_occupied
                                                if 'control' in set(self.ffx_state.get_field_effects(square))]))
-            return occupation
+            return list(occupation)
 
     def get_legal_moves(self, square: int):
         return list(self.board_state.pickup_piece(square))
@@ -65,8 +65,8 @@ class Game:
     def queue_move(self, move: tuple[int, int]):
         self.board_state.queue_move(move)
 
-    def queue_cards(self, p_side: str, cards: list[str]):
-        self.hand_state.queue_cards(p_side, cards)
+    def queue_cards(self, p_side: str, cards: list[str]) -> list[tuple[int, int]]:
+        return self.hand_state.queue_cards(p_side, cards)
 
     def cast_spell(self, p_side: str, card: str):
         return list(self.hand_state.begin_cast(p_side, card))

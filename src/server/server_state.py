@@ -49,7 +49,7 @@ class FieldEffectsState:
                     self.b_effects = new_effects
 
     def check_counter_spells(self):
-        for square, effects in self.effects:
+        for square, effects in enumerate(self.effects):
             effect_names = set([effect[0] for effect in effects])
             if 'repair' in effect_names and 'remove_square' in effect_names:
                 self.update_field_effects(square, [effect for effect in effects if effect[0] in ['repair', 'remove_square']], func='del')
@@ -432,6 +432,13 @@ class BoardState:
                     offsets.append(x + y * 8)
             offsets = [offset for offset in offsets if self.board[offset] == 0]
             new_square = random.choice(offsets)
+        
+        if 'a' <= self.board[old_square] and self.board[old_square] <= 'z':
+            self.black_occupied.remove(old_square)
+            self.black_occupied.add(new_square)
+        if 'A' <= self.board[old_square] and self.board[old_square] <= 'Z':
+            self.white_occupied.remove(old_square)
+            self.white_occupied.add(old_square)
         self.board[new_square] = self.board[old_square]
         self.board[old_square] = 0
         self.field_effects.update_field_effects(new_square, self.field_effects.get_field_effects(old_square))
@@ -514,8 +521,8 @@ class HandState:
         # each hand is represented by a list of
         # strings, each of which is a card_id (name)
         self.white_hand = ['cruciatus', 'confringo', 'impedimenta', 'imperius']
-        self.black_hand = ['locomotor', 'legilimens', 'reparo', 'prior_incantato']
-        with open('./assets/spell_effects.json') as f:
+        self.black_hand = ['finite_incantatem', 'apparition', 'reparo', 'prior_incantato']
+        with open('./assets/cards/spell_effects.json') as f:
             self.spell_effects = json.load(f)
         self.w_queue = []
         self.b_queue = []
@@ -529,7 +536,7 @@ class HandState:
         effect_name = self.spell_effects[card][0]
         priority = self.spell_effects[card][1]
         if priority == 0:
-            return
+            return set(range(64))
         
         if effect_name in ['remove', 'repair']:
             return self.board_state.white_occupied.union(self.board_state.black_occupied)
@@ -595,15 +602,16 @@ class HandState:
                 if offsets:
                     valid_squares.add(square)
             return valid_squares
+        
         return set(range(64))
 
-    def queue_cards(self, p_side: str, cards: list[tuple[str, int]]):
+    def queue_cards(self, p_side: str, cards: list[tuple[str, int]]) -> list[tuple[int, int]]:
         if p_side == 'w':
             self.w_queue = cards
         else:
             self.b_queue = cards
         self.instant_cast(p_side)
-        self.project_quick_cast(p_side)
+        return self.project_quick_cast(p_side)
 
     def instant_cast(self, p_side: str):
         if p_side == 'w':
@@ -663,7 +671,7 @@ class HandState:
                 case 'move_anywhere':
                     self.queued_displacements.append((target, card_play[2]))
 
-    def project_quick_cast(self, p_side: str):
+    def project_quick_cast(self, p_side: str) -> list[tuple[int, int]]:
         self.queued_displacements = []
         if p_side == 'w':
             self.project_w_quick_cast()
@@ -671,34 +679,10 @@ class HandState:
         else:
             self.project_b_quick_cast()
             self.project_w_quick_cast()
-
-    def w_normal_cast(self):
-        for card_play in self.w_queue:
-            card_effect = self.spell_effects[card_play[0]]
-            if card_effect[1] != 2:
-                continue
-            target = card_play[1]
-            effect_name = card_effect[0]
-            self.field_effects.update_field_effects(target, [effect_name], func='add')        
-    
-    def b_normal_cast(self):
-        for card_play in self.w_queue:
-            card_effect = self.spell_effects[card_play[0]]
-            if card_effect[1] != 2:
-                continue
-            target = card_play[1]
-            effect_name = card_effect[0]
-            self.field_effects.update_field_effects(target, [effect_name], func='add')        
-
-    def normal_cast(self, p_side: str):
-        if p_side == 'w':
-            self.w_normal_cast()
-            self.b_normal_cast()
-        else:
-            self.b_normal_cast()
-            self.w_normal_cast()
+        return self.queued_displacements
 
     def resolve_turn(self):
+        # determine which sides should resolve cards first
         if self.board_state.move == 0:
             first_quick = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 1]
             second_quick = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 1]
@@ -710,6 +694,7 @@ class HandState:
             first_normal = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 2]
             second_normal = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 2]
 
+        # quick cards resolve
         for card_play in first_quick:
             card = card_play[0]
             target = card_play[1]
@@ -720,28 +705,41 @@ class HandState:
             card = card_play[0]
             target = card_play[1]
             effect_name = self.spell_effects[card][0]
+            cd = self.spell_effects[card][2]
             self.field_effects.update_field_effects(target, [(effect_name, cd)])
-    
+
+        # cards that displace pieces
         for displacement in self.queued_displacements:
             self.board_state.displace_piece(displacement)
+
+        # piece move on board
         self.board_state.make_board_move()
 
+        # normal cards resolve
         for card_play in first_normal:
             card = card_play[0]
             target = card_play[1]
             effect_name = self.spell_effects[card][0]
+            cd = self.spell_effects[card][2]
             self.field_effects.update_field_effects(target, [(effect_name, cd)])
+
         for card_play in second_normal:
             card = card_play[0]
             target = card_play[1]
             effect_name = self.spell_effects[card][0]
+            cd = self.spell_effects[card][2]
             self.field_effects.update_field_effects(target, [(effect_name, cd)])
 
+        # check for counter spells
         self.field_effects.check_counter_spells()
 
+        # check for effects on the board
         self.board_state.resolve_effects()
+        # effects cooldowns
         self.field_effects.cooldown_effects()
 
+        [self.white_hand.remove(card_play[0]) for card_play in self.w_queue]
+        [self.black_hand.remove(card_play[0]) for card_play in self.b_queue]
         self.w_queue = []
         self.b_queue = []
 

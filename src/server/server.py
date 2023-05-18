@@ -71,8 +71,9 @@ def threaded_client(conn: socket.socket, p: str, game_id: int):
                                 'valid_targets': game.cast_spell(req['p_side'], req['card'])
                             }
                         case 'play_cards':
-                            game.queue_cards(req['p_side'], req['cards'])
-                            reply = game.get_hand_state(req['p_side'])
+                            reply = {
+                                'quick_projection': game.queue_cards(req['p_side'], req['cards'])
+                            }
                         case 'end_phase':
                             game.end_phase()
                             reply = {
