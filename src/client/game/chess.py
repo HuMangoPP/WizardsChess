@@ -275,6 +275,7 @@ class Board:
     def render(self):
         self.display.blit(self.board_surf, self.board_rect)
         self.render_legal_moves()
+        self.render_spell_targets()
         # self.render_checked_squares()
         self.render_pieces()
         self.render_held_piece()

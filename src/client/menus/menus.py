@@ -287,6 +287,8 @@ class GameMenu:
                         if req['req_type'] == 'cast_spell':
                             self.p_hand.valid_targets = set(res['valid_targets'])
                             self.board.spell_targets = set(res['valid_targets'])
+                        elif req['req_type'] == 'play_cards':
+                            projection = res['quick_projection']
                     else:
                         self.goto = 'start'
                         self.transition_phase = 1
