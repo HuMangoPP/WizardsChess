@@ -65,7 +65,10 @@ class Game:
     def queue_move(self, move: tuple[int, int]):
         self.board_state.queue_move(move)
 
-    def queue_cards(self, p_side: str, cards: list[str]) -> list[tuple[int, int]]:
+    def get_displacements(self):
+        return self.hand_state.queued_displacements
+
+    def queue_cards(self, p_side: str, cards: list[tuple[str, int, int]]) -> list[tuple[int, int]]:
         return self.hand_state.queue_cards(p_side, cards)
 
     def cast_spell(self, p_side: str, card: str) -> list[int] | dict[str, list[int]]:

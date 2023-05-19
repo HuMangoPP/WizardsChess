@@ -31,7 +31,7 @@ class Hand:
         self.cards = new_hand
 
         # a card in the queue is represented by [Card object, target square]
-        self.queue = [card_play for card_play in self.queue if [card_play[0].spell, card_play[1]] in queue]
+        self.queue = [card_play for card_play in self.queue if [card_play[0].spell, card_play[1], card_play[2]] in queue]
 
     def input(self, events: list[pg.Event]) -> dict:
         req = {}

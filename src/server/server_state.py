@@ -440,7 +440,7 @@ class BoardState:
             self.black_occupied.add(new_square)
         if 'A' <= self.board[old_square] and self.board[old_square] <= 'Z':
             self.white_occupied.remove(old_square)
-            self.white_occupied.add(old_square)
+            self.white_occupied.add(new_square)
         self.board[new_square] = self.board[old_square]
         self.board[old_square] = 0
         self.field_effects.update_field_effects(new_square, self.field_effects.get_field_effects(old_square))
@@ -466,6 +466,7 @@ class BoardState:
                 if self.move == 0:
                     black_occupied_cp.remove(pl_move)
                 else:
+                    print(white_occupied_cp)
                     white_occupied_cp.remove(pl_move)
             # update the board state
             board_cp[pl_move] = piece
@@ -553,7 +554,6 @@ class HandState:
                     y = square // 8 - strength
                     if y < 0 or any(self.board_state.board[square - 8 * i] != 0 for i in range(1, strength+1)):
                         invalid_squares.add(square)
-                    print(invalid_squares)
                 return squares.difference(invalid_squares)
             else:
                 for square in squares:
@@ -591,9 +591,11 @@ class HandState:
                 return self.board_state.black_occupied
         elif effect_name in ['move_anywhere']:
             if p_side == 'w':
-                return set(range(64)).difference(self.board_state.black_occupied)
+                target_piece = set(self.board_state.white_occupied)
             else:
-                return set(range(64)).difference(self.board_state.white_occupied)
+                target_piece = set(self.board_state.black_occupied)
+            target_loc = set(range(64)).difference(set(self.board_state.white_occupied).union(set(self.board_state.black_occupied)))
+            return [target_piece, target_loc]
         elif effect_name in ['move_random']:
             squares = self.board_state.white_occupied.union(self.board_state.black_occupied)
             valid_squares = set()
@@ -607,13 +609,9 @@ class HandState:
                 if offsets:
                     valid_squares.add(square)
             return valid_squares
-        elif effect_name in ['apparition']:
-            target_piece = set(self.board_state.white_occupied)
-            target_loc = set(range(64)).difference(set(self.board_state.white_occupied).union(set(self.board_state.black_occupied)))
-            return [target_piece, target_loc]
         return set(range(64))
 
-    def queue_cards(self, p_side: str, cards: list[tuple[str, int]]) -> list[tuple[int, int]]:
+    def queue_cards(self, p_side: str, cards: list[tuple[str, int, int]]) -> list[tuple[int, int]]:
         if p_side == 'w':
             self.w_queue = cards
         else:
@@ -731,7 +729,7 @@ class HandState:
         # cards that displace pieces
         for displacement in self.queued_displacements:
             self.board_state.displace_piece(displacement)
-
+        self.queued_displacements = []
         # piece move on board
         self.board_state.make_board_move()
 

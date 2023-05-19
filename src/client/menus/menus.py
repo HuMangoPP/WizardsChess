@@ -222,6 +222,7 @@ class GameMenu:
             res = self.client.send_req(req)
             if res:
                 self.board.update_board_state(res['board_state'], res['occupy'], res['queued_move'])
+                self.board.displacements = res['displacements']
             else:
                 self.goto = 'start'
                 self.transition_phase = 1
@@ -248,7 +249,6 @@ class GameMenu:
                         'req_type': 'end_phase',
                         'p_side': self.p_side
                     }
-                    self.board.displacements = set()
                     try:
                         self.client.send_req(req)
                     except Exception as e:
@@ -293,8 +293,6 @@ class GameMenu:
                             else:
                                 self.p_hand.valid_targets = set(valid_targets)
                                 self.board.spell_targets = set(valid_targets)
-                        elif req['req_type'] == 'play_cards':
-                            self.board.displacements = res['quick_projection']
                     else:
                         self.goto = 'start'
                         self.transition_phase = 1

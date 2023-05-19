@@ -48,7 +48,8 @@ def threaded_client(conn: socket.socket, p: str, game_id: int):
                             reply = {
                                 'board_state': game.get_board_state(),
                                 'occupy': game.get_occupation(req['p_side']),
-                                'queued_move': game.get_queued_move()
+                                'queued_move': game.get_queued_move(),
+                                'displacements': game.get_displacements()
                             }
                         case 'hand':
                             # this returns the current hand states, including the players hand
