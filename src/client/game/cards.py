@@ -21,6 +21,7 @@ class Hand:
         self.card_height = self.card_designs['gryffindor_gold']['border'].get_height()
 
         self.new_card_in_queue = None
+        self.apparition = set()
         self.valid_targets = set()
 
     def update_hand(self, hand: list[str], queue: list[tuple[str, int]]):
@@ -47,17 +48,37 @@ class Hand:
                         chunked_y = zeroed_y // TILESIZE
                     if (0 <= chunked_x and chunked_x < 8) and (0 <= chunked_y and chunked_y < 8):
                         target = chunked_x + chunked_y * 8
-                        if target in self.valid_targets:
-                            new_card_play = [self.new_card_in_queue, target]
-                            self.queue.append(new_card_play)
-                            req = {
-                                'req_type': 'play_cards',
-                                'p_side': self.menu.p_side,
-                                'cards': [[card[0].spell, card[1]] for card in self.queue],
-                            }
-                    self.new_card_in_queue = None
+                        if isinstance(self.new_card_in_queue, list):
+                            if target in self.apparition:
+                                new_card_play = [self.new_card_in_queue[0], self.new_card_in_queue[1], target]
+                                self.queue.append(new_card_play)
+                                req = {
+                                    'req_type': 'play_cards',
+                                    'p_side': self.menu.p_side,
+                                    'cards': [[card[0].spell, card[1], card[2]] for card in self.queue],
+                                }
+                            self.new_card_in_queue = None
+                        elif self.new_card_in_queue.spell == 'apparition':
+                            if target in self.valid_targets:
+                                self.new_card_in_queue = [self.new_card_in_queue, target]
+                            else:
+                                self.new_card_in_queue = None
+                        else:
+                            if target in self.valid_targets:
+                                new_card_play = [self.new_card_in_queue, target, -1]
+                                self.queue.append(new_card_play)
+                                req = {
+                                    'req_type': 'play_cards',
+                                    'p_side': self.menu.p_side,
+                                    'cards': [[card[0].spell, card[1], card[2]] for card in self.queue],
+                                }
+                    if isinstance(self.new_card_in_queue, list):
+                        self.menu.board.spell_targets = self.apparition
+                    else:
+                        self.new_card_in_queue = None
+                        self.menu.board.spell_targets = set()
+                        self.apparition = set()
                     self.valid_targets = set()
-                    self.menu.board.spell_targets = set()
                     
                 else:
                     # get the card in the hand that was clicked
@@ -74,7 +95,6 @@ class Hand:
                     to_hand = {i for i, card in enumerate(self.queue) if card[0].click(event.pos)}
                     [self.queue.pop(i) for i in to_hand]
                 
-
         return req
 
     def update(self, events: list[pg.Event], dt: float):
@@ -87,57 +107,6 @@ class Hand:
     def render(self, displays: dict[str, pg.Surface]):
         [card.render(displays) for card in self.cards]
 
-# this class will allow me to encapsulate some static functionality that i want for a card
-# this dict maps spell names to a parametric function that determines the wand path
-# each card is [name: str, num_moves: int, optional: int]
-# TODO: move these into a .json file
-# SPELL_WAND_PATHS = {
-#     'avada_kedavra': lambda t : (-0.3 * (t - math.floor(0.5 + t)), 0.6 * (t - 0.5)),
-#     'accio': lambda t : (-0.3 * math.cos(math.pi * t), -0.25 * math.sin(math.pi * t)),
-#     'depulso': lambda t : (-0.3 * math.cos(math.pi * t), 0.25 * math.sin(math.pi * t)),
-#     'confundus': lambda t : (min(0.25, t) * math.sin(2 * math.pi * t), 
-#                              -0.5 / (0.5 + t) * math.sin(5 * math.pi / 6 * t) + 0.3),
-#     'deprimo': lambda t : ((t + 1) / 4 * max(min(math.sin(2 * math.pi * (t + 0.1)), 0.6), -0.6),
-#                            0.5 / (t + 1) * max(min(math.cos(2 * math.pi * (t + 0.1)), 0.6), -0.6)),
-#     'reducio': lambda t : (0.8 * (t - 0.5), -1.25 * abs(t - 0.5) + 0.3),
-#     'expelliarmus': lambda t : (-0.5 / (5 * t + 1.1) * math.sin(12 / 3.2 * math.pi * t),
-#                                 -0.35 / (5 * t + 1.1) * math.cos(12 / 3.2 * math.pi * t)),
-#     'disillusionment': lambda t : (-0.35 / (2 * t + 1.1) * math.cos(12 / 3.2 * math.pi * t),
-#                                    -0.5 / (5 * t + 1.1) * math.sin(12 / 3.2 * math.pi * t)),
-#     'duro': lambda t : (-0.2 if t < 0.5 else 0.5 * math.sin(2 * math.pi * (t - 0.5)) - 0.2, 
-#                         -0.35 * math.cos(2 * math.pi * (t - 0.5))),
-#     'engorgio': lambda t : (-0.3 * math.sin(2 * math.pi * t) if (0.1 <= t and t <= 0.9) else -0.3 * math.sin(2 * math.pi * min(max(t, 0.1), 0.9)),
-#                             -0.35 * math.cos(2 * math.pi * t) if (0.1 <= t and t <= 0.9) else -0.35),
-#     'fiendfyre': lambda t : (0.8 * (t - 0.5), t * (0.2 * round(math.sin(math.pi / 1.5 * t) - 0.4) + 0.1) if t <= 0.9 else -0.4),
-#     'finite_incantatem': lambda t : (-1.5 * (abs(t - 0.5) - 0.25),
-#                                      1.5 * (t - 0.25) if t <= 0.5 else 1.5 * (t - 0.75)),
-#     'flipendo': lambda t : (0.85 * (t - 0.5) if t <= 0.5 else -0.2 * math.cos(2 * math.pi * (t-0.5)) + 0.2, 
-#                             -2*abs(t-0.25) + 0.25 if t <= 0.5 else 0.25 * math.sin(2 * math.pi * (t - 0.5))),
-#     'immobulus': lambda t : (0.85 * (t - 0.5), -0.85 * ((math.sin(2 * math.pi * (t - 0.5)))**2 - 0.5)),
-#     'petrificus_totalus': lambda t : (-0.2 * math.cos(2 * math.pi * t) - 0.2 if t <= 0.5 else t - 0.5,
-#                                       0.2 * math.sin(2 * math.pi * t) if t <= 0.5 else 0),
-#     'fumos': lambda t : (0.4 / (t + 1) * math.sin(2.2 * math.pi * t), 
-#                          0.4 / (t + 1) * math.cos(2.2 * math.pi * t)),
-
-#     'cruciatus': lambda t : (-1.85 * (abs(t / 0.5 - math.floor(t / 0.5 + 0.5)) - 0.25), 0.85 * (t - 0.5)),
-#     'confringo': lambda t : (1.85 * (abs(t / 0.66 - math.floor(t / 0.66 + 0.5)) - 0.25),
-#                              0.6 * (1 / (1 + math.exp(-10 * (t - 0.5))) - 0.5)),
-#     'impedimenta': lambda t : (0.85 * (t - 0.5), 0),
-#     'imperius': lambda t : (-(abs(t - math.floor(t + 0.5)) - 0.25) if t <= 0.85 else 0.1,
-#                             0.25 if t <= 0.5 else -abs(t / 0.5 - math.floor(t / 0.5 + 0.5)) + 0.25),
-#     'locomotor': lambda t : (0.85 * (t - 0.5), -0.85 * (t - 0.5)),
-#     'legilimens': lambda t : (-1.9 * (abs(t - 0.5) - 0.25), -0.2 * math.sin(2 * math.pi * t)),
-#     'reparo': lambda t : (1.5 * (abs((t - 0.25) - math.floor((t - 0.25) + 0.5)) - 0.25),
-#                           -2 * abs(max(min(t, 0.75), 0.25) - 0.45) + 0.25),
-#     'prior_incantato': lambda t : (-0.45 * math.sin(2 * math.pi * t), -0.45 * math.cos(2 * math.pi * t)),
-#     'protego': lambda t : (0, -0.85 * (t - 0.5)),
-#     'stupefy': lambda t : (0, 0.85 * (t - 0.5)),
-#     'apparition': lambda t : (0.4 * t * math.cos(6 * math.pi * t), (0.4 * t * math.sin(6 * math.pi * t))),
-#     'revelio': lambda t : (-0.07 if t <= 0.1 else max(-0.2 * math.sin(2 * math.pi / 0.9 * (t - 0.6)), 0.85 * (t - 0.6)),
-#                            0.35 if t <= 0.1 else max(0.2 * math.cos(2 * math.pi / 0.9 * (t - 0.6)), 0.85 * (t - 0.6))),
-#     'obscuro': lambda t : (-0.35 * math.cos(2 * math.pi * (t - 0.1)) if t <= 0.75 else -2 * (t - 0.85),
-#                            0.35 * math.sin(2 * math.pi * (t - 0.1)) if t <= 0.75 else 2 * (t - 0.85))
-# }
 SPELL_WAND_PATHS = load_json('./assets/cards/spell_paths.json')
 SPELL_DESC = load_json('./assets/cards/spell_desc.json')
 SPELL_COLORS = load_json('./assets/cards/spell_colors.json')

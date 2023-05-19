@@ -68,8 +68,15 @@ class Game:
     def queue_cards(self, p_side: str, cards: list[str]) -> list[tuple[int, int]]:
         return self.hand_state.queue_cards(p_side, cards)
 
-    def cast_spell(self, p_side: str, card: str):
-        return list(self.hand_state.begin_cast(p_side, card))
+    def cast_spell(self, p_side: str, card: str) -> list[int] | dict[str, list[int]]:
+        res = self.hand_state.begin_cast(p_side, card)
+        if isinstance(res, set):
+            return list(res)
+        else:
+            return {
+                'piece': list(res[0]), 
+                'loc': list(res[1])
+            }
 
     def end_phase(self):
         if self.current_phase == 1:

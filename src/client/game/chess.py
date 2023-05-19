@@ -28,6 +28,7 @@ class Board:
         self.held_piece = ''
         self.legal_moves = set()
         self.spell_targets = set()
+        self.displacements = set()
 
     def update_board_state(self, fen_str: str, occupy: list[int], queued_move: tuple[int, int]):
         self.board : list[str] = []
@@ -133,14 +134,20 @@ class Board:
         return req
 
     def render_pieces(self):
+        displace_from = [displacement[0] for displacement in self.displacements]
+        displace_to = [displacement[1] for displacement in self.displacements]
+
         if self.flip:
-            for i in range(len(self.board)-1, -1, -1):
-                square = self.board[i]
-                if square and i != self.queued_move[0]:
+            for square_index in range(len(self.board)-1, -1, -1):
+                square = self.board[square_index]
+                if square and square_index != self.queued_move[0] and square_index not in displace_from:
+                    # square != 0
+                    # square_index is not the queued move
+                    # square index is not a displaced piece
                     piece = square.lower()
-                    x = (i % 8 + 0.5) * TILESIZE + self.board_rect.left
-                    y = (7 - i // 8 + 0.85) * TILESIZE + self.board_rect.top
-                    if i == self.hovered_square:
+                    x = (square_index % 8 + 0.5) * TILESIZE + self.board_rect.left
+                    y = (7 - square_index // 8 + 0.85) * TILESIZE + self.board_rect.top
+                    if square_index == self.hovered_square:
                         y -= TILESIZE / 2
                     if 'a' <= square and square <= 'z':
                         piece_surf = self.piece_collection[self.black_palette][piece]
@@ -149,7 +156,7 @@ class Board:
                     piece_rect = piece_surf.get_rect()
                     piece_rect.centerx = x
                     piece_rect.bottom = y
-                    if i == self.hovered_square:
+                    if square_index == self.hovered_square:
                         shadow = pg.Surface((TILESIZE, TILESIZE))
                         pg.draw.circle(shadow, (50, 50, 50), (TILESIZE/2, TILESIZE/2), 0.35 * TILESIZE)
                         shadow.set_colorkey((0, 0, 0))
@@ -158,7 +165,29 @@ class Board:
                         shadow_rect.centery = y + 0.15 * TILESIZE
                         self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
                     self.display.blit(piece_surf, piece_rect)
-            
+
+            for index in range(len(displace_to)-1, -1, -1):
+                square_index = displace_to[index]
+                square = self.board[displace_from[index]]
+                piece = square.lower()
+                x = (square_index % 8 + 0.5) * TILESIZE + self.board_rect.left
+                y = (7 - square_index // 8 + 0.35) * TILESIZE + self.board_rect.top
+                if 'a' <= square and square <= 'z':
+                    piece_surf = self.piece_collection[self.black_palette][piece]
+                else:
+                    piece_surf = self.piece_collection[self.white_palette][piece]
+                piece_rect = piece_surf.get_rect()
+                piece_rect.centerx = x
+                piece_rect.bottom = y
+                shadow = pg.Surface((TILESIZE, TILESIZE))
+                pg.draw.circle(shadow, (50, 50, 50), (TILESIZE/2, TILESIZE/2), 0.35 * TILESIZE)
+                shadow.set_colorkey((0, 0, 0))
+                shadow_rect = shadow.get_rect()
+                shadow_rect.centerx = x
+                shadow_rect.centery = y + 0.15 * TILESIZE
+                self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
+                self.display.blit(piece_surf, piece_rect)
+
             # queued move
             if self.queued_move[1] != -1:
                 x = (self.queued_move[1] % 8 + 0.5) * TILESIZE + self.board_rect.left
@@ -182,7 +211,7 @@ class Board:
                 self.display.blit(piece_surf, piece_rect)
         else:
             for i, square in enumerate(self.board):
-                if square and i != self.queued_move[0]:
+                if square and i != self.queued_move[0] and i not in displace_from:
                     piece = square.lower()
                     x = (i % 8 + 0.5) * TILESIZE + self.board_rect.left
                     y = (i // 8 + 0.85) * TILESIZE + self.board_rect.top
@@ -205,6 +234,27 @@ class Board:
                         self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
                     self.display.blit(piece_surf, piece_rect)
             
+            for index, square_index in enumerate(displace_to):
+                square = self.board[displace_from[index]]
+                piece = square.lower()
+                x = (square_index % 8 + 0.5) * TILESIZE + self.board_rect.left
+                y = (square_index // 8 + 0.35) * TILESIZE + self.board_rect.top
+                if 'a' <= square and square <= 'z':
+                    piece_surf = self.piece_collection[self.black_palette][piece]
+                else:
+                    piece_surf = self.piece_collection[self.white_palette][piece]
+                piece_rect = piece_surf.get_rect()
+                piece_rect.centerx = x
+                piece_rect.bottom = y
+                shadow = pg.Surface((TILESIZE, TILESIZE))
+                pg.draw.circle(shadow, (50, 50, 50), (TILESIZE/2, TILESIZE/2), 0.35 * TILESIZE)
+                shadow.set_colorkey((0, 0, 0))
+                shadow_rect = shadow.get_rect()
+                shadow_rect.centerx = x
+                shadow_rect.centery = y + 0.15 * TILESIZE
+                self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
+                self.display.blit(piece_surf, piece_rect)
+
             # queued move
             if self.queued_move[1] != -1:
                 x = (self.queued_move[1] % 8 + 0.5) * TILESIZE + self.board_rect.left

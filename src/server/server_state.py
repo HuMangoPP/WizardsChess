@@ -62,6 +62,8 @@ class FieldEffectsState:
                 self.update_field_effects(square, [effect], func='del')
                 if effect[1] > 0:
                     self.update_field_effects(square, [(effect[0], effect[1] - 1)], func='add')
+                if effect[1] == -1:
+                    self.update_field_effects(square, [(effect[0], effect[1])], func='add')
 
 
 WHITE_PIECES = 'PNBRQK'
@@ -446,7 +448,8 @@ class BoardState:
 
     def pickup_piece(self, square: int) -> set[int]:
         piece = self.board[square]
-        effects = set(self.field_effects.get_field_effects(square))
+        effects = self.field_effects.get_field_effects(square)
+        effects = set([effect[0] for effect in effects])
         if 'cannot_move' in effects:
             return set()
         
@@ -520,13 +523,14 @@ class HandState:
     def __init__(self, field_effects: FieldEffectsState, board_state: BoardState):
         # each hand is represented by a list of
         # strings, each of which is a card_id (name)
-        self.white_hand = ['cruciatus', 'confringo', 'impedimenta', 'imperius']
+        self.white_hand = ['cruciatus', 'accio', 'impedimenta', 'flipendo']
         self.black_hand = ['finite_incantatem', 'apparition', 'reparo', 'prior_incantato']
         with open('./assets/cards/spell_effects.json') as f:
             self.spell_effects = json.load(f)
         self.w_queue = []
         self.b_queue = []
         self.queued_displacements = []
+        self.last_spell_casted = None
 
         self.field_effects = field_effects
         self.board_state = board_state
@@ -546,14 +550,15 @@ class HandState:
             invalid_squares = set()
             if p_side == 'w':
                 for square in squares:
-                    y = square // 8 - 8 * strength
-                    if y < 0 or any(self.board_state.board[square // 8 - 8 * i] != 0 for i in range(1, strength+1)):
+                    y = square // 8 - strength
+                    if y < 0 or any(self.board_state.board[square - 8 * i] != 0 for i in range(1, strength+1)):
                         invalid_squares.add(square)
+                    print(invalid_squares)
                 return squares.difference(invalid_squares)
             else:
                 for square in squares:
-                    y = square // 8 + 8 * strength
-                    if y >= 8 or any(self.board_state.board[square // 8 + 8 * i] != 0 for i in range(1, strength+1)):
+                    y = square // 8 + strength
+                    if y >= 8 or any(self.board_state.board[square + 8 * i] != 0 for i in range(1, strength+1)):
                         invalid_squares.add(square)
                 return squares.difference(invalid_squares)
         elif effect_name in ['move_back']:
@@ -562,14 +567,14 @@ class HandState:
             invalid_squares = set()
             if p_side == 'b':
                 for square in squares:
-                    y = square // 8 - 8 * strength
-                    if y < 0 or any(self.board_state.board[square // 8 - 8 * i] != 0 for i in range(1, strength+1)):
+                    y = square // 8 - strength
+                    if y < 0 or any(self.board_state.board[square - 8 * i] != 0 for i in range(1, strength+1)):
                         invalid_squares.add(square)
                 return squares.difference(invalid_squares)
             else:
                 for square in squares:
-                    y = square // 8 + 8 * strength
-                    if y >= 8 or any(self.board_state.board[square // 8 + 8 * i] != 0 for i in range(1, strength+1)):
+                    y = square // 8 + strength
+                    if y >= 8 or any(self.board_state.board[square + 8 * i] != 0 for i in range(1, strength+1)):
                         invalid_squares.add(square)
                 return squares.difference(invalid_squares)
         elif effect_name in ['remove_square']:
@@ -602,7 +607,10 @@ class HandState:
                 if offsets:
                     valid_squares.add(square)
             return valid_squares
-        
+        elif effect_name in ['apparition']:
+            target_piece = set(self.board_state.white_occupied)
+            target_loc = set(range(64)).difference(set(self.board_state.white_occupied).union(set(self.board_state.black_occupied)))
+            return [target_piece, target_loc]
         return set(range(64))
 
     def queue_cards(self, p_side: str, cards: list[tuple[str, int]]) -> list[tuple[int, int]]:
@@ -620,8 +628,14 @@ class HandState:
             if card_effects[1] == 0:
                 if card_effects[0] == 'remove':
                     self.field_effects.update_field_effects(recent_card_play[1], [])
+                elif card_effects[0] == 'echo':
+                    if self.last_spell_casted is not None:
+                        self.white_hand.append(self.last_spell_casted)
                 else:
                     self.field_effects.update_side_effects('w', [card_effects[0]], func='add')
+                self.white_hand.remove(recent_card_play[0])
+                if card_effects[0] != 'echo':
+                    self.last_spell_casted = recent_card_play[0]
                 self.w_queue.pop()
         else:
             recent_card_play = self.b_queue[-1]
@@ -629,8 +643,14 @@ class HandState:
             if card_effects[1] == 0:
                 if card_effects[0] == 'remove':
                     self.field_effects.update_field_effects(recent_card_play[1], [])
+                elif card_effects[0] == 'echo':
+                    if self.last_spell_casted is not None:
+                        self.black_hand.append(self.last_spell_casted)
                 else:
                     self.field_effects.update_side_effects('b', [card_effects[0]], func='add')
+                self.black_hand.remove(recent_card_play[0])
+                if card_effects[0] != 'echo':
+                    self.last_spell_casted = recent_card_play[0]
                 self.b_queue.pop()  
 
     def project_w_quick_cast(self):
@@ -729,10 +749,18 @@ class HandState:
             effect_name = self.spell_effects[card][0]
             cd = self.spell_effects[card][2]
             self.field_effects.update_field_effects(target, [(effect_name, cd)])
+        
+        if second_normal:
+            self.last_spell_casted = second_normal[-1][0]
+        elif first_normal:
+            self.last_spell_casted = first_normal[-1][0]
+        elif second_quick:
+            self.last_spell_casted = second_quick[-1][0]
+        elif first_quick:
+            self.last_spell_casted = first_quick[-1][0]
 
         # check for counter spells
         self.field_effects.check_counter_spells()
-
         # check for effects on the board
         self.board_state.resolve_effects()
         # effects cooldowns

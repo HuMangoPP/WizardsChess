@@ -225,7 +225,6 @@ class GameMenu:
             else:
                 self.goto = 'start'
                 self.transition_phase = 1
-
             req = {
                 'req_type': 'hand',
                 'p_side': self.p_side
@@ -249,6 +248,7 @@ class GameMenu:
                         'req_type': 'end_phase',
                         'p_side': self.p_side
                     }
+                    self.board.displacements = set()
                     try:
                         self.client.send_req(req)
                     except Exception as e:
@@ -285,10 +285,16 @@ class GameMenu:
                     res = self.client.send_req(req)
                     if res:
                         if req['req_type'] == 'cast_spell':
-                            self.p_hand.valid_targets = set(res['valid_targets'])
-                            self.board.spell_targets = set(res['valid_targets'])
+                            valid_targets = res['valid_targets']
+                            if isinstance(valid_targets, dict):
+                                self.p_hand.valid_targets = set(valid_targets['piece'])
+                                self.p_hand.apparition = set(valid_targets['loc'])
+                                self.board.spell_targets = set(valid_targets['piece'])
+                            else:
+                                self.p_hand.valid_targets = set(valid_targets)
+                                self.board.spell_targets = set(valid_targets)
                         elif req['req_type'] == 'play_cards':
-                            projection = res['quick_projection']
+                            self.board.displacements = res['quick_projection']
                     else:
                         self.goto = 'start'
                         self.transition_phase = 1
