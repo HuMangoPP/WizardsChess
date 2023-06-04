@@ -31,6 +31,9 @@ def threaded_client(conn: socket.socket, p: str, game_id: int):
             req = json.loads(conn.recv(4096).decode())
             if game_id in games:
                 game = games[game_id]
+
+                if game.current_phase == 2:
+                    game.resolve_turn()
                 
                 if req:
                     match req['req_type']:

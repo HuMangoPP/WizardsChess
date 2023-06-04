@@ -13,6 +13,8 @@ class Game:
         self.phase_fulfilled = 0
 
         self.ready = False
+
+        self.resolve_timer = 100
     
     def get_turn_phase(self, p_side: str):
         go_p_side = 'w' if self.board_state.move == 0 else 'b'
@@ -81,10 +83,16 @@ class Game:
                 'loc': list(res[1])
             }
 
+    def resolve_turn(self):
+        self.resolve_timer -= 1
+        if self.resolve_timer <= 0:
+            end = self.hand_state.resolve_turn()
+            if end:
+                self.current_phase = 0
+            self.resolve_timer = 100
+
     def end_phase(self):
-        if self.current_phase == 1:
-            self.hand_state.resolve_turn()
-        self.current_phase = (self.current_phase + 1) % 2
+        self.current_phase += 1
 
     def is_ready(self):
         return self.ready

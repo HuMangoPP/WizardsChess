@@ -168,6 +168,8 @@ class Board:
 
             for index in range(len(displace_to)-1, -1, -1):
                 square_index = displace_to[index]
+                if square_index == -1:
+                    square_index = displace_from[index]
                 square = self.board[displace_from[index]]
                 piece = square.lower()
                 x = (square_index % 8 + 0.5) * TILESIZE + self.board_rect.left
@@ -236,6 +238,8 @@ class Board:
             
             for index, square_index in enumerate(displace_to):
                 square = self.board[displace_from[index]]
+                if square_index == -1:
+                    square_index = displace_from[index]
                 piece = square.lower()
                 x = (square_index % 8 + 0.5) * TILESIZE + self.board_rect.left
                 y = (square_index // 8 + 0.35) * TILESIZE + self.board_rect.top

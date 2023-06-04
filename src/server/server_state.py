@@ -536,6 +536,8 @@ class HandState:
         self.field_effects = field_effects
         self.board_state = board_state
 
+        self.resolve_data = None
+
     def begin_cast(self, p_side: str, card: str) -> set[int]:
         # first do instant casts
         effect_name = self.spell_effects[card][0]
@@ -701,73 +703,76 @@ class HandState:
 
     def resolve_turn(self):
         # determine which sides should resolve cards first
-        if self.board_state.move == 0:
-            first_quick = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 1]
-            second_quick = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 1]
-            first_normal = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 2]
-            second_normal = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 2]
-        else:
-            first_quick = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 1]
-            second_quick = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 1]
-            first_normal = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 2]
-            second_normal = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 2]
+        if self.resolve_data is None:
+            if self.board_state.move == 0:
+                first_quick = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 1]
+                second_quick = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 1]
+                first_normal = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 2]
+                second_normal = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 2]
+            else:
+                first_quick = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 1]
+                second_quick = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 1]
+                first_normal = [card_play for card_play in self.b_queue if self.spell_effects[card_play[0]][1] == 2]
+                second_normal = [card_play for card_play in self.w_queue if self.spell_effects[card_play[0]][1] == 2]
+            self.resolve_data = ResolveData(first_quick, second_quick, first_normal, second_normal,
+                                            self.spell_effects)
+
+        
 
         # quick cards resolve
-        for card_play in first_quick:
-            card = card_play[0]
-            target = card_play[1]
-            effect_name = self.spell_effects[card][0]
-            cd = self.spell_effects[card][2]
-            self.field_effects.update_field_effects(target, [(effect_name, cd)])
-        for card_play in second_quick:
-            card = card_play[0]
-            target = card_play[1]
-            effect_name = self.spell_effects[card][0]
-            cd = self.spell_effects[card][2]
-            self.field_effects.update_field_effects(target, [(effect_name, cd)])
-
+        update_field = self.resolve_data.resolve_quick()
+        if update_field:
+            self.field_effects.update_field_effects(
+                update_field['target'],
+                update_field['effect'],
+                func='add'
+            )
+            return False
+        print('quick_cards')
         # cards that displace pieces
-        for displacement in self.queued_displacements:
+        if self.queued_displacements:
+            displacement = self.queued_displacements[0]
             self.board_state.displace_piece(displacement)
-        self.queued_displacements = []
+            self.queued_displacements = self.queued_displacements[1:]
+            return False
+        print('displacements')
         # piece move on board
-        self.board_state.make_board_move()
-
-        # normal cards resolve
-        for card_play in first_normal:
-            card = card_play[0]
-            target = card_play[1]
-            effect_name = self.spell_effects[card][0]
-            cd = self.spell_effects[card][2]
-            self.field_effects.update_field_effects(target, [(effect_name, cd)])
-
-        for card_play in second_normal:
-            card = card_play[0]
-            target = card_play[1]
-            effect_name = self.spell_effects[card][0]
-            cd = self.spell_effects[card][2]
-            self.field_effects.update_field_effects(target, [(effect_name, cd)])
+        if self.board_state.queued_move[0] != -1:
+            self.board_state.make_board_move()
+            return False
+        print('board_move')
         
-        if second_normal:
-            self.last_spell_casted = second_normal[-1][0]
-        elif first_normal:
-            self.last_spell_casted = first_normal[-1][0]
-        elif second_quick:
-            self.last_spell_casted = second_quick[-1][0]
-        elif first_quick:
-            self.last_spell_casted = first_quick[-1][0]
+        # normal cards resolve
+        update_field = self.resolve_data.resolve_normal()
+        if update_field:
+            self.field_effects.update_field_effects(
+                update_field['target'],
+                update_field['effect'],
+                func='add'
+            )
+            return False
+        print('normal_cards')
+        
+        # print(self.resolve_data)
+        self.last_spell_casted = self.resolve_data.most_recent_cast
 
         # check for counter spells
         self.field_effects.check_counter_spells()
+        print('counter')
         # check for effects on the board
         self.board_state.resolve_effects()
+        print('effects')
         # effects cooldowns
         self.field_effects.cooldown_effects()
+        print('cooldown')
 
         [self.white_hand.remove(card_play[0]) for card_play in self.w_queue]
         [self.black_hand.remove(card_play[0]) for card_play in self.b_queue]
         self.w_queue = []
         self.b_queue = []
+
+        self.resolve_data = None
+        return True
 
     def get_hands_data(self, p_side: str) -> dict:
         if p_side == 'w':
@@ -782,3 +787,57 @@ class HandState:
                 'o_hand': len(self.white_hand),
                 'queued': self.b_queue
             }
+
+class ResolveData:
+    def __init__(self, first_quick: list, second_quick: list, first_normal: list, second_normal: list, spell_effects: dict):
+        self.spell_effects = spell_effects
+        self.first_quick = first_quick
+        self.second_quick = second_quick
+        self.first_normal = first_normal
+        self.second_normal = second_normal
+
+        self.most_recent_cast = None
+
+    def resolve_quick(self) -> dict:
+        if self.first_quick:
+            card_play = self.first_quick[0]
+            card = card_play[0]
+            self.most_recent_cast = card
+            target = card_play[1]
+            effect_name = self.spell_effects[card][0]
+            cd = self.spell_effects[card][2]
+            self.first_quick = self.first_quick[1:]
+            return {'target':target, 'effect':[(effect_name, cd)]}
+        elif self.second_quick:
+            card_play = self.second_quick[0]
+            card = card_play[0]
+            self.most_recent_cast = card
+            target = card_play[1]
+            effect_name = self.spell_effects[card][0]
+            cd = self.spell_effects[card][2]
+            self.second_quick = self.second_quick[1:]
+            return {'target':target, 'effect':[(effect_name, cd)]}
+        else:
+            return {}
+    
+    def resolve_normal(self) -> dict:
+        if self.first_quick:
+            card_play = self.first_normal[0]
+            card = card_play[0]
+            self.most_recent_cast = card
+            target = card_play[1]
+            effect_name = self.spell_effects[card][0]
+            cd = self.spell_effects[card][2]
+            self.first_normal = self.first_normal[1:]
+            return {'target':target, 'effect':[(effect_name, cd)]}
+        elif self.second_quick:
+            card_play = self.second_normal[0]
+            card = card_play[0]
+            self.most_recent_cast = card
+            target = card_play[1]
+            effect_name = self.spell_effects[card][0]
+            cd = self.spell_effects[card][2]
+            self.second_normal = self.second_normal[1:]
+            return {'target':target, 'effect':[(effect_name, cd)]}
+        else:
+            return {}
