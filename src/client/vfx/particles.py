@@ -44,12 +44,13 @@ class Sparks:
                 pos, vel, lifetime
             ])
     
-    def update(self, dt: float, new_anchor: tuple[int, int]):
-        self.spawn_time += dt
-        if self.spawn_time >= self.spawn_rate:
-            self.anchor = new_anchor
-            self.spawn_particles()
-            self.spawn_time = 0
+    def update(self, dt: float, new_anchor: tuple[int, int], should_spawn: bool=True):
+        if should_spawn:
+            self.spawn_time += dt
+            if self.spawn_time >= self.spawn_rate:
+                self.anchor = new_anchor
+                self.spawn_particles()
+                self.spawn_time = 0
         
         for i in range(len(self.particles)-1, -1, -1):
             # self.particles[i][1] = self.particles[i][1] + np.array([0, 400]) * dt

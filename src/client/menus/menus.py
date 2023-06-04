@@ -3,7 +3,7 @@ import pygame as pg
 from ..util.transitions import transition_in, transition_out, TRANSITION_TIME
 
 from ..game.chess import Board
-from ..game.cards import Hand, HiddenHand
+from ..game.cards import Hand, HiddenHand, trace_wand_path, SPELL_COLORS, SPELL_WAND_PATHS
 
 from ..vfx.particles import Sparks
 
@@ -169,6 +169,9 @@ class GameMenu:
         #
         self.current_phase = 0
         self.can_go = False
+        self.card_animation = None
+        self.card_animation_time = 0
+        self.card_animation_sparks = Sparks((0, 0), (50, 50, 50))
 
     def on_load(self):
         self.on_transition()
@@ -211,6 +214,8 @@ class GameMenu:
             if res:
                 self.current_phase = res['phase']
                 self.can_go = res['can_go']
+                if 'card_animation' in res:
+                    self.card_animation = res['card_animation']
             else:
                 self.goto = 'start'
                 self.transition_phase = 1
@@ -303,6 +308,25 @@ class GameMenu:
         self.p_hand.update(events, dt)
         self.o_hand.update()
 
+        if self.card_animation is not None:
+            self.card_animation_time += dt * 60
+            if self.card_animation_time >= len(SPELL_WAND_PATHS[self.card_animation]):
+                # send req here 
+                req = {
+                    'req_type': 'animation_finished',
+                    'p_side': self.p_side
+                }
+                try:
+                    res = self.client.send_req(req)
+                except Exception as e:
+                    print(e)
+                self.card_animation = None
+                self.card_animation_time = 0
+            else:
+                self.card_animation_sparks.update(dt, trace_wand_path(pg.Rect(0,0,self.width,self.height),
+                                                                      self.card_animation,int(self.card_animation_time)))
+        else:
+            self.card_animation_sparks.update(dt, (0, 0), should_spawn=False)
         if self.transition_phase > 0:
             self.transition_time += dt
             if self.transition_phase == 1 and self.transition_time > TRANSITION_TIME:
@@ -335,6 +359,8 @@ class GameMenu:
         self.board.render()
         self.p_hand.render(self.displays)
         self.o_hand.render(self.displays[DEFAULT_DISPLAY])
+
+        self.card_animation_sparks.render(self.displays[EFFECTS_DISPLAY])
 
         match self.transition_phase:
             case 1: 

@@ -85,6 +85,18 @@ def threaded_client(conn: socket.socket, p: str, game_id: int):
                                 'occupy': game.get_occupation(req['p_side']),
                                 'queued_move': game.get_queued_move()
                             }
+                            if req['p_side'] == 'w':
+                                game.playing_animation[0] = True
+                            if req['p_side'] == 'b':
+                                game.playing_animation[1] = True
+                        case 'animation_finished':
+                            if req['p_side'] == 'w':
+                                game.playing_animation[0] = True
+                            if req['p_side'] == 'b':
+                                game.playing_animation[1] = True
+                            reply = {
+                                'success': True
+                            }
                 reply = json.dumps(reply)
                 conn.sendall(str.encode(reply))
             else:

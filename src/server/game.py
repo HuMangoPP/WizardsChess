@@ -14,7 +14,7 @@ class Game:
 
         self.ready = False
 
-        self.resolve_timer = 100
+        self.playing_animation = [False, False]
     
     def get_turn_phase(self, p_side: str):
         go_p_side = 'w' if self.board_state.move == 0 else 'b'
@@ -32,7 +32,8 @@ class Game:
             case 2:
                 return {
                     'phase': self.current_phase,
-                    'can_go': False
+                    'can_go': False,
+                    'card_animation': self.hand_state.animate_card
                 }        
 
     def get_board_state(self):
@@ -84,12 +85,11 @@ class Game:
             }
 
     def resolve_turn(self):
-        self.resolve_timer -= 1
-        if self.resolve_timer <= 0:
+        if all(self.playing_animation) or self.hand_state.animate_card is None:
+            self.playing_animation = [False, False]
             end = self.hand_state.resolve_turn()
             if end:
                 self.current_phase = 0
-            self.resolve_timer = 100
 
     def end_phase(self):
         self.current_phase += 1

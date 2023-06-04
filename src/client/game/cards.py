@@ -111,7 +111,8 @@ SPELL_WAND_PATHS = load_json('./assets/cards/spell_paths.json')
 SPELL_DESC = load_json('./assets/cards/spell_desc.json')
 SPELL_COLORS = load_json('./assets/cards/spell_colors.json')
 
-def draw_wand_path(card: pg.Surface, path: list[tuple[int, int]]):
+def draw_wand_path(card: pg.Surface, path: str):
+    path = SPELL_WAND_PATHS[path]
     width, height = card.get_size()
     for i in range(len(path) - 1):
         pg.draw.line(card, (255, 255, 255), 
@@ -123,8 +124,8 @@ def render_card_name(font, card: pg.Surface, spell_name: str):
     text = spell_name.replace('_', ' ')
     font.render(card, text, width / 2, 40, (255, 255, 255), 10, 'center', box_width=width-20)
 
-def trace_wand_path(card_rect: pg.Rect, path: list[tuple[int, int]], t: int):
-    anchor = np.array(path[t])
+def trace_wand_path(card_rect: pg.Rect, path: str, t: int):
+    anchor = np.array(SPELL_WAND_PATHS[path][t])
     width, height = card_rect.size
     return np.array(card_rect.center) + np.array([(width - 50), (height - 50)]) * anchor
 
@@ -134,7 +135,7 @@ def render_card_desc(font, card: pg.Surface, spell_name: str):
 class Card:
     def __init__(self, font, card_designs: dict[str, dict[str, pg.Surface]], spell: str, color_theme: str):
         card = card_designs[color_theme]['border'].copy()
-        draw_wand_path(card, SPELL_WAND_PATHS[spell])
+        draw_wand_path(card, spell)
         render_card_name(font, card, spell)
         text = card_designs[color_theme]['border'].copy()
         render_card_desc(font, text, spell)
@@ -157,7 +158,7 @@ class Card:
         self.t += dt * 60
         if self.t >= len(SPELL_WAND_PATHS[self.spell]):
             self.t = 0
-        new_anchor = trace_wand_path(self.draw_rect, SPELL_WAND_PATHS[self.spell], int(self.t))
+        new_anchor = trace_wand_path(self.draw_rect, self.spell, int(self.t))
         self.sparks.update(dt, new_anchor)
 
     def click(self, mouse: tuple[int, int]) -> bool:

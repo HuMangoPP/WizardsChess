@@ -537,6 +537,7 @@ class HandState:
         self.board_state = board_state
 
         self.resolve_data = None
+        self.animate_card = None
 
     def begin_cast(self, p_side: str, card: str) -> set[int]:
         # first do instant casts
@@ -717,9 +718,8 @@ class HandState:
             self.resolve_data = ResolveData(first_quick, second_quick, first_normal, second_normal,
                                             self.spell_effects)
 
-        
-
         # quick cards resolve
+        self.animate_card = None
         update_field = self.resolve_data.resolve_quick()
         if update_field:
             self.field_effects.update_field_effects(
@@ -727,6 +727,7 @@ class HandState:
                 update_field['effect'],
                 func='add'
             )
+            self.animate_card = update_field['animation']
             return False
         print('quick_cards')
         # cards that displace pieces
@@ -807,7 +808,8 @@ class ResolveData:
             effect_name = self.spell_effects[card][0]
             cd = self.spell_effects[card][2]
             self.first_quick = self.first_quick[1:]
-            return {'target':target, 'effect':[(effect_name, cd)]}
+            return {'target':target, 'effect':[(effect_name, cd)],
+                    'animation': card}
         elif self.second_quick:
             card_play = self.second_quick[0]
             card = card_play[0]
@@ -816,7 +818,8 @@ class ResolveData:
             effect_name = self.spell_effects[card][0]
             cd = self.spell_effects[card][2]
             self.second_quick = self.second_quick[1:]
-            return {'target':target, 'effect':[(effect_name, cd)]}
+            return {'target':target, 'effect':[(effect_name, cd)],
+                    'animation': card}
         else:
             return {}
     
