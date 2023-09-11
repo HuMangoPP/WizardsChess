@@ -630,8 +630,22 @@ Queued Slow Spells: {self.queued_slow_effects}"""
         self.queued_fast_effects = fast + self.queued_fast_effects
         self.queued_slow_effects = slow + self.queued_slow_effects
 
-    def inflict_side_effect(self, side: int, effect_data: dict):
-        self.side_effects[side].append(Effect(effect_data))
+    def inflict_side_effect(self, side: int, rank: int, file: int, effect_id: dict):
+        if effect_id in ['reveal']:
+            self.side_effects[side].append(Effect({
+                'name': effect_id,
+                'duration': 1
+            }))
+        elif effect_id in ['backfire']:
+            self.side_effects[side].append(Effect({
+                'name': effect_id,
+                'duration': -1,
+            }))
+        else:
+            self.moveable_effects[rank][file].append(Effect({
+                'name': effect_id,
+                'duration': 3,
+            }))
 
     def resolve_fast_effects(self, board_manager: BoardManager, hands_manager):
         if len(self.queued_fast_effects) == 0:
@@ -971,13 +985,26 @@ Black Queue: {self.black_queue}"""
         self._clear_coins()
 
     ### user request ###
-    def queue_card(self, side: int, card_index: int, rank: int, file: int, **kwargs):
+    def queue_card(self, side: int, card_index: int, rank: int, file: int, effects_manager: EffectsManager):
         if side > 0:
-            # queue target at the index
-            self.white_queue[card_index] = [rank, file]
+            card_id = self.white_hand[card_index]
+            if self.card_data[card_id]['speed'] == 0:
+                effects_manager.inflict_side_effect(
+                    side, 
+                    rank, 
+                    file,
+                    self.card_data[card_id]['effect_id']
+                )
+            else:
+                # queue target at the index
+                self.white_queue[card_index] = [rank, file]
             return self.white_queue
         else:
-            self.black_queue[card_index] = [rank, file]
+            card_id = self.white_hand[card_index]
+            if self.card_data[card_id]['speed'] == 0:
+                ...
+            else:
+                self.black_queue[card_index] = [rank, file]
             return self.black_queue
 
     def lock_in_cards(self, side: int, effects_manager: EffectsManager):
@@ -1212,7 +1239,8 @@ class GameState:
             card_queue = self.hands_manager.queue_card(side, **params)
             return {
                 'status': 'success',
-                'card_queue': card_queue.flatten().tolist()
+                'card_queue': card_queue.flatten().tolist(),
+                'side_effects': self.effects_manager.get_side_effects_json()
             }
         elif req['endpoint'] == 'pickup_piece':
             if not self.board_manager.pickup_piece(
@@ -1226,15 +1254,6 @@ class GameState:
                 'status': 'success',
                 'possible_moves': self.board_manager.possible_moves.flatten().astype(int).tolist()
             }
-        elif req['endpoint'] == 'pickup_card':
-            if self.hands_manager.pickup_card(
-                req['side'],
-                **params
-            ):
-                return {
-                    'status': 'success',
-                    'side_effects': self.effects_manager.get_side_effects_json()
-                }
         
         return {
             'status': 'success'

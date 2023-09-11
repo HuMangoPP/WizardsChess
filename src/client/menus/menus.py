@@ -397,6 +397,7 @@ class GameMenu(Menu):
 
         self.moveable_effects = res['moveable_effects']
         self.static_effects = res['static_effects']
+        self.side_effects = res['side_effects']
 
         self.moveable_pieces = np.full((8,8), False)
         self.possible_moves = np.full((8,8), False)
@@ -472,7 +473,7 @@ class GameMenu(Menu):
                 for event in events:
                     if event.type == pg.MOUSEMOTION:
                         if (
-                            self.board_renderer.board_rect.collidepoint(*event.pos) and
+                            self.board_renderer.board_rect.collidepoint(event.pos) and
                             self.board_renderer.holding[0] == -1
                         ):
                             tilesize = self.board_renderer.board_rect.width // 8
@@ -483,7 +484,7 @@ class GameMenu(Menu):
                             self.board_renderer.hovering = [-1,-1]
                     
                     if event.type == pg.MOUSEBUTTONUP:
-                        if self.board_renderer.board_rect.collidepoint(*event.pos):
+                        if self.board_renderer.board_rect.collidepoint(event.pos):
                             tilesize = self.board_renderer.board_rect.width // 8
                             file, rank = (np.array(event.pos) - self.board_renderer.board_rect.topleft) // tilesize
                             
@@ -538,16 +539,8 @@ class GameMenu(Menu):
                             self.cards_renderer.pickup_card = -1
                         
                         for i, card_rect in enumerate(self.cards_renderer.card_rects):
-                            if card_rect.collidepoint(*event.pos) and self.card_queue[i][0] == -1:
+                            if card_rect.collidepoint(event.pos) and self.card_queue[i][0] == -1:
                                 self.cards_renderer.pickup_card = i
-                                req = {
-                                    'method': 'post',
-                                    'endpoint': 'pickup_card',
-                                    'params': {
-                                        'card_index': i
-                                    }
-                                }
-                                res = self.client.send_req(req)
 
                     if event.type == pg.KEYUP:
                         if event.key == pg.K_RETURN:
