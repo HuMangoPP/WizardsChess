@@ -1,206 +1,243 @@
 import pygame as pg
 import numpy as np
-import math
 
-from ..vfx.particles import Sparks
-from ..util.asset_loader import load_json
+from ..vfx.particles import Bolt
+from ..util.asset_loader import load_json, load_spritesheet
 
-TILESIZE = 48
+class _Settings:
+    CARD_BORDER = pg.image.load('./assets/cards/border2.png')
+    CARD_SLEEVE = pg.image.load('./assets/cards/sleeve2.png')
+    CARD_RECT = CARD_BORDER.get_rect()
 
-class Hand:
-    def __init__(self, menu, hand: list[str]):
+    COIN_BORDER = pg.image.load('./assets/cards/coin_border.png')
+    COIN_SLEEVE = pg.image.load('./assets/cards/coin_sleeve.png')
+    COIN_RECT = COIN_BORDER.get_rect()
+
+    def pg_convert():
+        _Settings.CARD_BORDER.convert()
+        _Settings.CARD_SLEEVE.convert()
+        _Settings.COIN_BORDER.convert()
+        _Settings.COIN_SLEEVE.convert()
+        _Settings.COIN_BORDER.set_colorkey((0,255,0))
+        _Settings.COIN_SLEEVE.set_colorkey((0,255,0))
+
+class CardsRenderer:
+    def __init__(self, menu):
         self.menu = menu
-        self.font = menu.font
-        self.card_designs = menu.card_collection
-        self.color_theme = menu.white_theme
-        self.cards = []
-        self.queue = []
-        self.update_hand(hand, [])
+        _Settings.pg_convert()
+        self._create_cards()
 
-        self.card_width = self.card_designs['gryffindor_gold']['border'].get_width()
-        self.card_height = self.card_designs['gryffindor_gold']['border'].get_height()
-
-        self.new_card_in_queue = None
-        self.apparition = set()
-        self.valid_targets = set()
-
-    def update_hand(self, hand: list[str], queue: list[tuple[str, int]]):
-        new_hand = [card for card in self.cards if card.spell in hand]
-        [hand.remove(card.spell) for card in new_hand]
-        [new_hand.append(Card(self.font, self.card_designs, spell, self.color_theme)) for spell in hand]
-        self.cards = new_hand
-
-        # a card in the queue is represented by [Card object, target square]
-        self.queue = [card_play for card_play in self.queue if [card_play[0].spell, card_play[1], card_play[2]] in queue]
-
-    def input(self, events: list[pg.Event]) -> dict:
-        req = {}
-        for event in events:
-            if event.type == pg.MOUSEBUTTONUP:
-                # determine which cards in queue were clicked
-                if self.new_card_in_queue:
-                    zeroed_x = event.pos[0] - self.menu.board.board_rect.left
-                    zeroed_y = event.pos[1] - self.menu.board.board_rect.top
-                    chunked_x = zeroed_x // TILESIZE
-                    if self.menu.board.flip:
-                        chunked_y = 7 - zeroed_y // TILESIZE
-                    else:
-                        chunked_y = zeroed_y // TILESIZE
-                    if (0 <= chunked_x and chunked_x < 8) and (0 <= chunked_y and chunked_y < 8):
-                        target = chunked_x + chunked_y * 8
-                        if isinstance(self.new_card_in_queue, list):
-                            if target in self.apparition:
-                                new_card_play = [self.new_card_in_queue[0], self.new_card_in_queue[1], target]
-                                self.queue.append(new_card_play)
-                                req = {
-                                    'req_type': 'play_cards',
-                                    'p_side': self.menu.p_side,
-                                    'cards': [[card[0].spell, card[1], card[2]] for card in self.queue],
-                                }
-                            self.new_card_in_queue = None
-                        elif self.new_card_in_queue.spell == 'apparition':
-                            if target in self.valid_targets:
-                                self.new_card_in_queue = [self.new_card_in_queue, target]
-                            else:
-                                self.new_card_in_queue = None
-                        else:
-                            if target in self.valid_targets:
-                                new_card_play = [self.new_card_in_queue, target, -1]
-                                self.queue.append(new_card_play)
-                                req = {
-                                    'req_type': 'play_cards',
-                                    'p_side': self.menu.p_side,
-                                    'cards': [[card[0].spell, card[1], card[2]] for card in self.queue],
-                                }
-                    if isinstance(self.new_card_in_queue, list):
-                        self.menu.board.spell_targets = self.apparition
-                    else:
-                        self.new_card_in_queue = None
-                        self.menu.board.spell_targets = set()
-                        self.apparition = set()
-                    self.valid_targets = set()
-                    
-                else:
-                    # get the card in the hand that was clicked
-                    card_queue = set([card_play[0] for card_play in self.queue])
-                    to_queue = [card for card in self.cards if card.click(event.pos) and card not in card_queue]
-                    if to_queue:
-                        self.new_card_in_queue = to_queue[0]
-                        req = {
-                            'req_type': 'cast_spell',
-                            'p_side': self.menu.p_side,
-                            'card': self.new_card_in_queue.spell
-                        }
-                    # get the indices in queue that are to be returned to hand
-                    to_hand = {i for i, card in enumerate(self.queue) if card[0].click(event.pos)}
-                    [self.queue.pop(i) for i in to_hand]
-                
-        return req
-
-    def update(self, events: list[pg.Event], dt: float):
-        for event in events:
-            if event.type == pg.MOUSEBUTTONUP:
-                [card.scroll_card_face(event.pos) for card in self.cards]
-        card_queue = set([card_play[0] for card_play in self.queue])
-        [card.update((self.card_width * (i - len(self.cards) / 2) + 500, 650 if card in card_queue else 750), dt) for i, card in enumerate(self.cards)]
-
-    def render(self, displays: dict[str, pg.Surface]):
-        [card.render(displays) for card in self.cards]
-
-SPELL_WAND_PATHS = load_json('./assets/cards/spell_paths.json')
-SPELL_DESC = load_json('./assets/cards/spell_desc.json')
-SPELL_COLORS = load_json('./assets/cards/spell_colors.json')
-
-def draw_wand_path(card: pg.Surface, path: str):
-    path = SPELL_WAND_PATHS[path]
-    width, height = card.get_size()
-    for i in range(len(path) - 1):
-        pg.draw.line(card, (255, 255, 255), 
-                     np.array([width/2, height/2]) + np.array([(width - 50) * path[i][0], (height-50) * path[i][1]]), 
-                     np.array([width/2, height/2]) + np.array([(width - 50) * path[i+1][0], (height-50) * path[i+1][1]]), 5)
-
-def render_card_name(font, card: pg.Surface, spell_name: str):
-    width = card.get_width()
-    text = spell_name.replace('_', ' ')
-    font.render(card, text, width / 2, 40, (255, 255, 255), 10, 'center', box_width=width-20)
-
-def trace_wand_path(card_rect: pg.Rect, path: str, t: int):
-    anchor = np.array(SPELL_WAND_PATHS[path][t])
-    width, height = card_rect.size
-    return np.array(card_rect.center) + np.array([(width - 50), (height - 50)]) * anchor
-
-def render_card_desc(font, card: pg.Surface, spell_name: str):
-    font.render(card, SPELL_DESC[spell_name], 35, 50, (255, 255, 255), 10, box_width=card.get_width()-70)
-
-class Card:
-    def __init__(self, font, card_designs: dict[str, dict[str, pg.Surface]], spell: str, color_theme: str):
-        card = card_designs[color_theme]['border'].copy()
-        draw_wand_path(card, spell)
-        render_card_name(font, card, spell)
-        text = card_designs[color_theme]['border'].copy()
-        render_card_desc(font, text, spell)
-        self.draw_rect = card.get_rect()
-
-        self.card_faces = [
-            card, # i can potentially draw this using vfx procedurally
-            text, # this one is drawn
-        ]
-        
-        self.spell = spell
-        self.t = 0
-        self.spell_color = SPELL_COLORS[spell]
-        self.sparks = Sparks(self.draw_rect.center, self.spell_color)
-        self.current_side_up = 0
+        self._init_hand_variables()
+        self.clear_animation()
     
-    def update(self, topleft: tuple[int, int], dt: float):
-        self.draw_rect.left, self.draw_rect.top = topleft
+    def _init_hand_variables(self):
+        self.card_rects = []
+        self.pickup_card = -1
 
-        self.t += dt * 60
-        if self.t >= len(SPELL_WAND_PATHS[self.spell]):
-            self.t = 0
-        new_anchor = trace_wand_path(self.draw_rect, self.spell, int(self.t))
-        self.sparks.update(dt, new_anchor)
+        self.my_coin_rects = []
+        self.opponent_coin_rects = []
+        self.revealed_coins = []
+    
+    def clear_animation(self):
+        self.animating = False
+        self.bolt = None
 
-    def click(self, mouse: tuple[int, int]) -> bool:
-        if self.draw_rect.collidepoint(mouse):
+    def _create_cards(self):
+        self.cards = {}
+        self.card_colours = {}
+        card_data = load_json('./assets/cards/card_data.json')
+
+        for card_id, data in card_data.items():
+            front = _Settings.CARD_BORDER.copy()
+            self.menu.client.font.render(
+                front,
+                data['display_name'],
+                _Settings.CARD_RECT.width / 2,
+                _Settings.CARD_RECT.height / 5,
+                data['colour'],
+                4,
+                style='center',
+                box_width=_Settings.CARD_RECT.width * 4 / 5
+            )
+            pg.draw.lines(
+                front,
+                data['colour'],
+                False,
+                np.array(data['path']) * _Settings.CARD_RECT.width / 2 + _Settings.CARD_RECT.center
+            )
+
+            desc = _Settings.CARD_BORDER.copy()
+            self.menu.client.font.render(
+                desc,
+                data['description'],
+                _Settings.CARD_RECT.width / 2,
+                _Settings.CARD_RECT.height / 2,
+                data['colour'],
+                4,
+                style='center',
+                box_width=_Settings.CARD_RECT.width * 4 / 5
+            )
+
+            back = _Settings.CARD_SLEEVE.copy()
+
+            self.cards[card_id] = [front, desc, back]
+            self.card_colours[card_id] = data['colour']
+    
+        self._create_coins(card_data)
+
+    def _create_coins(self, card_data: dict):
+        self.coins = {}
+        for card_id, data in card_data.items():
+            front = _Settings.COIN_BORDER.copy()
+            self.menu.client.font.render(
+                front,
+                data['display_name'],
+                _Settings.COIN_RECT.width / 2,
+                _Settings.COIN_RECT.height / 2,
+                data['colour'],
+                4,
+                style='center',
+                box_width=_Settings.COIN_RECT.width * 4 / 5
+            )
+            pg.draw.lines(
+                front,
+                data['colour'],
+                False,
+                np.array(data['path']) * _Settings.COIN_RECT.width / 2 + _Settings.COIN_RECT.center
+            )
+
+            back = _Settings.COIN_SLEEVE.copy()
+
+            self.coins[card_id] = [front, back]
+        
+    def _render_my_hand(self, display: pg.Surface):
+        my_hand = [self.cards[card_id] for card_id in self.menu.my_hand]
+        
+        center_offset = (len(my_hand) - 1) / 2
+        self.card_rects = []
+        for i, card in enumerate(my_hand):
+            x = i - center_offset
+            x = x * _Settings.CARD_RECT.width
+            y = self.menu.client.screen_size[1] - _Settings.CARD_RECT.height
+
+            if self.pickup_card == i:
+                y -= _Settings.CARD_RECT.height
+            
+            if self.menu.card_queue[i][0] != -1:
+                y -= _Settings.CARD_RECT.height
+
+            card_rect = card[0].get_rect()
+            card_rect.centerx = x + self.menu.client.screen_size[0] / 2
+            card_rect.centery = y
+            self.card_rects.append(card_rect)
+
+            display.blit(card[1 if self.pickup_card == i else 0], card_rect)
+    
+    def _render_opponent_hand(self, display: pg.Surface):
+        opponent_hand = [self.cards[card_id] for card_id in self.menu.opponent_hand]
+        flip_states = np.full(len(opponent_hand), 2)
+
+        center_offset = (len(opponent_hand) - 1) / 2
+        for i, (card, flip_state) in enumerate(zip(opponent_hand, flip_states)):
+            x = i - center_offset
+            x = x * _Settings.CARD_RECT.width
+            y = _Settings.CARD_RECT.height
+
+            card_rect = card[flip_state].get_rect()
+            card_rect.centerx = x + self.menu.client.screen_size[0] / 2
+            card_rect.centery = y
+
+            display.blit(card[flip_state], card_rect)
+    
+    def _render_my_coins(self, display: pg.Surface):
+        center_offset = (len(self.menu.my_coins) - 1) / 2
+        self.my_coin_rects = []
+        for i, coin_data in enumerate(self.menu.my_coins):
+            x = i - center_offset
+            x = x * _Settings.COIN_RECT.width
+            y = self.menu.client.screen_size[1] - _Settings.COIN_RECT.height - 2 * _Settings.CARD_RECT.height
+
+            coin_surfs = self.coins[coin_data['card_id']]
+            coin_rect = coin_surfs[0].get_rect()
+            coin_rect.centerx = x + self.menu.client.screen_size[0] / 2
+            coin_rect.centery = y
+            self.my_coin_rects.append(coin_rect)
+
+            display.blit(coin_surfs[0], coin_rect)
+
+    def _render_opponent_coins(self, display: pg.Surface):
+        if len(self.menu.opponent_coins) > len(self.revealed_coins):
+            self.revealed_coins = (
+                self.revealed_coins + 
+                [False for _ in range(len(self.menu.opponent_coins) - len(self.revealed_coins))]
+            )
+        else:
+            self.revealed_coins = self.revealed_coins[:len(self.menu.opponent_coins)]
+
+        center_offset = (len(self.menu.opponent_coins) - 1) / 2
+        self.opponent_coin_rects = []
+        for i, coin_data in enumerate(self.menu.opponent_coins):
+            x = i - center_offset
+            x = x * _Settings.COIN_RECT.width
+            y = _Settings.COIN_RECT.height + 2 * _Settings.CARD_RECT.height
+
+            coin_surfs = self.coins[coin_data['card_id']]
+            coin_rect = coin_surfs[0].get_rect()
+            coin_rect.centerx = x + self.menu.client.screen_size[0] / 2
+            coin_rect.centery = y
+            self.opponent_coin_rects.append(coin_rect)
+
+            if self.revealed_coins[i]:
+                display.blit(coin_surfs[0], coin_rect)
+            else:
+                display.blit(coin_surfs[1], coin_rect)
+
+    def render(self, display: pg.Surface):
+        self._render_my_hand(display)
+        self._render_opponent_hand(display)
+        self._render_my_coins(display)
+        self._render_opponent_coins(display)
+        if self.bolt is not None:
+            self.bolt.render(display)
+
+    def animate_reveal_coins(self):
+        if np.all(self.revealed_coins):
             return True
+            
+        indices = np.where(self.revealed_coins)[0]
+        if indices.size > 0:
+            self.revealed_coins[indices[-1] + 1] = True
+        else:
+            self.revealed_coins[0] = True
+        
+        return False
+    
+    def create_spell_animation(self, t: float):
+        if len(self.menu.my_coins) != len(self.menu.my_dummy_coins):
+            rank,file = self.menu.my_coins[0]['target']
+            self.bolt = Bolt(
+                np.array(self.my_coin_rects[0].center),
+                np.array(self.menu.board_renderer.piece_rects[rank][file].center),
+                self.card_colours[self.menu.my_coins[0]['card_id']],
+                t
+            )
+        else:
+            rank,file = self.menu.opponent_coins[0]['target']
+            self.bolt = Bolt(
+                np.array(self.opponent_coin_rects[0].center),
+                np.array(self.menu.board_renderer.piece_rects[rank][file].center),
+                self.card_colours[self.menu.opponent_coins[0]['card_id']],
+                t
+            )
+        self.animating = True
+
+    def animate_spell(self, dt: float):
+        if self.bolt is not None:
+            if self.bolt.update(dt) and self.animating:
+                self.menu.my_coins = self.menu.my_dummy_coins
+                self.menu.opponent_coins = self.menu.opponent_dummy_coins
+                self.animating = False
+                return True
+        
         return False
 
-    def scroll_card_face(self, mouse: tuple[int, int]):
-        if self.draw_rect.collidepoint(mouse):
-            self.current_side_up = (self.current_side_up + 1) % 2
-
-    def render(self, displays: dict[str, pg.Surface]):
-        displays['default'].blit(self.card_faces[self.current_side_up], self.draw_rect)
-        if self.current_side_up == 0:
-            self.sparks.render(displays['gaussian_blur'])
-
-class HiddenHand:
-    def __init__(self, menu, hand_size: int):
-        self.card_designs = menu.card_collection
-        self.color_theme = menu.white_theme
-        self.cards = []
-        self.update_hand(hand_size)
-        self.card_width = self.card_designs['gryffindor_gold']['border'].get_width()
-        self.card_height = self.card_designs['gryffindor_gold']['border'].get_height()
-
-    def update_hand(self, hand_size: int):
-        self.cards = [HiddenCard(self.card_designs, self.color_theme) for _ in range(hand_size)]
-
-    def update(self):
-        [self.cards[i].update((self.card_width * (i - len(self.cards) / 2) + 500, 0)) for i in range(len(self.cards))]
-
-    def render(self, display: pg.Surface):
-        [card.render(display) for i, card in enumerate(self.cards)]
-
-class HiddenCard:
-    def __init__(self, card_designs: dict[str, dict[str, pg.Surface]], color_theme: str):
-        self.card_face = card_designs[color_theme]['sleeve'].copy()
-        self.draw_rect = self.card_face.get_rect()
-    
-    def update(self, topleft: tuple[int, int]):
-        self.draw_rect.top = topleft[1]
-        self.draw_rect.left = topleft[0]
-
-    def render(self, display: pg.Surface):
-        display.blit(self.card_face, self.draw_rect)
