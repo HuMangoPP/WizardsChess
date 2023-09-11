@@ -540,6 +540,14 @@ class GameMenu(Menu):
                         for i, card_rect in enumerate(self.cards_renderer.card_rects):
                             if card_rect.collidepoint(*event.pos) and self.card_queue[i][0] == -1:
                                 self.cards_renderer.pickup_card = i
+                                req = {
+                                    'method': 'post',
+                                    'endpoint': 'pickup_card',
+                                    'params': {
+                                        'card_index': i
+                                    }
+                                }
+                                res = self.client.send_req(req)
 
                     if event.type == pg.KEYUP:
                         if event.key == pg.K_RETURN:

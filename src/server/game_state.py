@@ -596,14 +596,42 @@ Queued Slow Spells: {self.queued_slow_effects}"""
             for _ in range(8)
         ]
 
+        self.side_effects = {
+            1: [],
+            -1: [],
+        }
+
     def _clear_queue(self):
         self.queued_fast_effects = []
         self.queued_slow_effects = []
+
+    def _check_durations(self):
+        for rank, (moveable_row, static_row) in enumerate(zip(self.moveable_effects, self.static_effects)):
+            for file, (moveable_effects, static_effects) in enumerate(zip(moveable_row, static_row)):
+                self.moveable_effects[rank][file] = [
+                    moveable_effect for moveable_effect in moveable_effects 
+                    if moveable_effect.duration != 0
+                ]
+                self.static_effects[rank][file] = [
+                    static_effect for static_effect in static_effects
+                    if static_effect.duration != 0
+                ]
+        
+        for side, side_effects in self.side_effects.items():
+            for side_effect in side_effects:
+                side_effect.duration -= 1
+            self.side_effects[side] = [
+                side_effect for side_effect in side_effects
+                if side_effect.duration != 0
+            ]
 
     # external use ###
     def queue_effects(self, fast: list, slow: list):
         self.queued_fast_effects = fast + self.queued_fast_effects
         self.queued_slow_effects = slow + self.queued_slow_effects
+
+    def inflict_side_effect(self, side: int, effect_data: dict):
+        self.side_effects[side].append(Effect(effect_data))
 
     def resolve_fast_effects(self, board_manager: BoardManager, hands_manager):
         if len(self.queued_fast_effects) == 0:
@@ -765,7 +793,7 @@ Queued Slow Spells: {self.queued_slow_effects}"""
             self.static_effects[rank][file].append(
                 Effect({
                     'name': '@'.join(effect_id),
-                    'duration': 0
+                    'duration': 1
                 })
             )
         
@@ -851,7 +879,14 @@ Queued Slow Spells: {self.queued_slow_effects}"""
         
         return moveable_field_effects, static_field_effects
 
+    def get_side_effects_json(self):
+        return {
+            side: [side_effect.to_json() for side_effect in self.side_effects[side]]
+            for side in [1,-1]
+        }
+
     def end_turn(self):
+        self._check_durations()
         self._clear_queue()
 
 
@@ -1007,6 +1042,27 @@ Black Queue: {self.black_queue}"""
 
         self._clear_queues()
 
+    def pickup_card(self, side: int, card_index: int, effects_manager: EffectsManager):
+        if side > 0:
+            card_id = self.white_hand[card_index]
+        else:
+            card_id = self.black_hand[card_index]
+        
+        if self.card_data[card_id]['speed'] == 0:
+            effect_id = self.card_data[card_id]['effect_id']
+            if effect_id in ['backfire']: # TODO: backfire should actually do something
+                effects_manager.inflict_side_effect(-side, {
+                    'name': effect_id,
+                    'duration': -1,
+                })
+            elif effect_id in ['reveal']:
+                effects_manager.inflict_side_effect(-side, {
+                    'name': effect_id,
+                    'duration': 1
+                })
+            return True
+        return False
+
 
 class GameState:
     def __init__(self):
@@ -1090,7 +1146,8 @@ class GameState:
                 'status': 'success',
                 'board_state': self.board_manager.board_state.flatten().tolist(),
                 'moveable_effects': moveable_effects,
-                'static_effects': static_effects
+                'static_effects': static_effects,
+                'side_effects': self.effects_manager.get_side_effects_json()
             }
         elif req['endpoint'] == 'hand':
             hands = {
@@ -1169,6 +1226,15 @@ class GameState:
                 'status': 'success',
                 'possible_moves': self.board_manager.possible_moves.flatten().astype(int).tolist()
             }
+        elif req['endpoint'] == 'pickup_card':
+            if self.hands_manager.pickup_card(
+                req['side'],
+                **params
+            ):
+                return {
+                    'status': 'success',
+                    'side_effects': self.effects_manager.get_side_effects_json()
+                }
         
         return {
             'status': 'success'
