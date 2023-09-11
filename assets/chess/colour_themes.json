@@ -1,0 +1,45 @@
+{
+    "gryffindor_red": {
+        "light": [240, 240, 240],
+        "dark": [174, 0, 1],
+        "main": [174, 0, 1]
+    },
+    "gryffindor_gold": {
+        "light": [238, 186, 48],
+        "dark": [30, 30, 30],
+        "main": [238, 186, 48]
+    },
+    
+    "slytherin_green": {
+        "light": [240, 240, 240],
+        "dark": [42, 98, 61],
+        "main": [42, 98, 61]
+    },
+    "slytherin_silver": {
+        "light": [170, 170, 170],
+        "dark": [30, 30, 30],
+        "main": [170, 170, 170]
+    },
+
+    "ravenclaw_blue": {
+        "light": [240, 240, 240],
+        "dark": [34, 47, 91],
+        "main": [34, 47, 91]
+    },
+    "ravenclaw_bronze": {
+        "light": [148, 107, 45],
+        "dark": [30, 30, 30],
+        "main": [148, 107, 45]
+    },
+
+    "hufflepuff_yellow": {
+        "light": [255, 219, 0],
+        "dark": [30, 30, 30],
+        "main": [255, 219, 0]
+    },
+    "hufflepuff_black": {
+        "light": [240, 240, 240],
+        "dark": [50, 50, 50],
+        "main": [50, 50, 50]
+    }
+}

@@ -1,0 +1,82 @@
+{
+    "death": {
+        "name": "Death",
+        "duration": 0
+    },
+    "move_back@1": {
+        "name": "Move Back@1",
+        "duration": 0
+    },
+    "move_forward@1": {
+        "name": "Move Forward@1",
+        "duration": 0
+    },
+    "move_random": {
+        "name": "Move Random",
+        "duration": 0
+    },
+    "remove_square": {
+        "name": "Remove Square",
+        "duration": 0
+    },
+    "shrink": {
+        "name": "Shrink",
+        "duration": 0
+    },
+    "backfire": {
+        "name": "Backfire",
+        "duration": 0
+    },
+    "invisible": {
+        "name": "Invisible",
+        "duration": 0
+    },
+    "cannot_move": {
+        "name": "Cannot Move",
+        "duration": 0
+    },
+    "grow": {
+        "name": "Grow",
+        "duration": 0
+    },
+    "area_attack@2": {
+        "name": "Area Attack@2",
+        "duration": 0
+    },
+    "remove_effect": {
+        "name": "Remove Effect",
+        "duration": 0
+    },
+    "move_forward@2": {
+        "name": "Move Forward@2",
+        "duration": 0
+    },
+    "move_anywhere": {
+        "name": "Move Anywhere",
+        "duration": 0
+    },
+    "control": {
+        "name": "Control",
+        "duration": 0
+    },
+    "reveal": {
+        "name": "Reveal",
+        "duration": 0
+    },
+    "repair": {
+        "name": "Repair",
+        "duration": 0
+    },
+    "echo": {
+        "name": "Echo",
+        "duration": 0
+    },
+    "shield": {
+        "name": "Shield",
+        "duration": 0
+    },
+    "break": {
+        "name": "Break",
+        "duration": 0
+    }
+}
