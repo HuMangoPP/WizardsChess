@@ -5,9 +5,8 @@ from .network import Network
 
 from .pymgl.graphics_engine import GraphicsEngine
 from .pyfont.font import Font
-from .util.asset_loader import load_sprites
 
-from .menus.menus import StartMenu, GameMenu, WaitingRoom
+from .menus.menus import Menu, StartMenu, GameMenu, WaitingRoom
 
 MENU_MAP = {
     'start': 0,
@@ -41,6 +40,7 @@ def get_chess_piece_palettes(chess_pieces: dict[str, pg.Surface]) -> dict[str, d
     
     return piece_collection
 
+
 def get_spell_card_palettes(card_designs: dict[str, pg.Surface]) -> dict[str, dict[str, pg.Surface]]:
     card_collection = {}
     for color in COLOR_PALETTES:
@@ -55,45 +55,56 @@ def get_spell_card_palettes(card_designs: dict[str, pg.Surface]) -> dict[str, di
     
     return card_collection
 
+
 class Client:
     def __init__(self):
-        pg.init()
-        self.res = (1000, 1000)
+        self._pg_init()
 
-        pg.display.set_mode(self.res, pg.OPENGL | pg.DOUBLEBUF)
+    def _pg_init(self):
+        # init
+        pg.init()
+
+        # get window and ctx
+        self.screen_size = (1000, 1000)
+        pg.display.set_mode(self.screen_size, pg.OPENGL | pg.DOUBLEBUF)
         self.ctx = mgl.create_context()
         self.ctx.enable(mgl.BLEND)
         self.ctx.blend_func = (
             mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA
         )
-        self.graphics_engine = GraphicsEngine(self.ctx, self.res, './src/client')
+
+        # get graphics engine, font, and displays
+        self.graphics_engine = GraphicsEngine(self.ctx, self.screen_size, './src/client')
         self.font = Font(pg.image.load('./src/client/pyfont/font.png').convert())
         self.displays = {
-            'default': pg.Surface(self.res),
-            'gaussian_blur': pg.Surface(self.res),
-            'black_alpha': pg.Surface(self.res)
+            'default': pg.Surface(self.screen_size),
+            'gaussian_blur': pg.Surface(self.screen_size),
+            'black_alpha': pg.Surface(self.screen_size)
         }
+
+        # clock
         self.clock = pg.time.Clock()
 
-        self.piece_collection = get_chess_piece_palettes(load_sprites(path='./assets/chess_pieces', scale=3, colorkey=(0, 255, 0)))
-        self.card_collection = get_spell_card_palettes(load_sprites(path='./assets/cards', scale=4, colorkey=(0, 0, 0)))
+        # assets
+        # self.card_palettes = get_spell_card_palettes(load_sprites(path='./assets/cards', scale=4, colorkey=(0, 0, 0)))
 
-        self.menus = [StartMenu(self), WaitingRoom(self), GameMenu(self)]
+        # menus
+        self.menus : list[Menu] = [StartMenu(self), WaitingRoom(self), GameMenu(self)]
         self.current_menu = 0
     
-    def create_new_connection(self):
-        self.n = Network()
-        self.p_side = self.n.get_p()
-        self.game_id = self.n.get_game_id()
-        # self.game_id = -1
+    def create_new_network(self, game_id: int | None = None):
+        self.net = Network(game_id=game_id)
     
     def send_req(self, req: dict) -> dict:
         try:
-            return self.n.send(req)
-        except:
-            return {}
+            return self.net.send_req(req)
+        except Exception as e:
+            print('Exception in Client.send_req()')
+            print(e)
+        return {}
 
     def update(self):
+        dt = self.clock.get_time() / 1000
         events = pg.event.get()
         for event in events:
             if event.type == pg.QUIT:
@@ -105,14 +116,18 @@ class Client:
                     'exit': True
                 }
         
-        return self.menus[self.current_menu].update(events)
-        
+        return self.menus[self.current_menu].update(events, dt)
+    
     def render(self):
         self.ctx.clear(0.08, 0.1, 0.2)
         displays_to_render = self.menus[self.current_menu].render()
-        [self.graphics_engine.render(self.displays[display], self.displays[display].get_rect(),
-                                     shader=display) for display in displays_to_render]
-        
+        [self.graphics_engine.render(
+            self.displays[display], 
+            self.displays[display].get_rect(), 
+            shader=display) 
+            for display in displays_to_render
+        ]
+    
     def run(self):
         self.menus[self.current_menu].on_load()
         while True:
@@ -124,6 +139,7 @@ class Client:
                 else:
                     self.current_menu = MENU_MAP[exit_status['goto']]
                     self.menus[self.current_menu].on_load()
+            
             self.render()
             self.clock.tick()
             pg.display.flip()
