@@ -1169,12 +1169,14 @@ class GameState:
                 }
         elif req['endpoint'] == 'board':
             moveable_effects, static_effects = self.effects_manager.get_field_effects_json()
+            side_effects = self.effects_manager.get_side_effects_json()
             return {
                 'status': 'success',
                 'board_state': self.board_manager.board_state.flatten().tolist(),
                 'moveable_effects': moveable_effects,
                 'static_effects': static_effects,
-                'side_effects': self.effects_manager.get_side_effects_json()
+                'my_side_effects': side_effects[side],
+                'opponent_side_effects': side_effects[-side],
             }
         elif req['endpoint'] == 'hand':
             hands = {
@@ -1237,10 +1239,12 @@ class GameState:
             self.phase += 1
         elif req['endpoint'] == 'queue_card':
             card_queue = self.hands_manager.queue_card(side, **params)
+            side_effects = self.effects_manager.get_side_effects_json()
             return {
                 'status': 'success',
                 'card_queue': card_queue.flatten().tolist(),
-                'side_effects': self.effects_manager.get_side_effects_json()
+                'my_side_effects': side_effects[side],
+                'opponent_side_effects': side_effects[-side],
             }
         elif req['endpoint'] == 'pickup_piece':
             if not self.board_manager.pickup_piece(

@@ -131,14 +131,23 @@ class CardsRenderer:
             card_rect.centery = y
             self.card_rects.append(card_rect)
 
-            display.blit(card[1 if self.pickup_card == i else 0], card_rect)
+            flip_state = 0
+            if self.pickup_card == i:
+                flip_state = 1
+            elif card_rect.collidepoint(pg.mouse.get_pos()):
+                flip_state = 1
+            display.blit(card[flip_state], card_rect)
     
     def _render_opponent_hand(self, display: pg.Surface):
         opponent_hand = [self.cards[card_id] for card_id in self.menu.opponent_hand]
-        flip_states = np.full(len(opponent_hand), 2)
 
         center_offset = (len(opponent_hand) - 1) / 2
-        for i, (card, flip_state) in enumerate(zip(opponent_hand, flip_states)):
+        opponent_side_effects = [
+            side_effects['name'] for side_effects in
+            self.menu.opponent_side_effects
+        ]
+        flip_state = 0 if 'reveal' in opponent_side_effects else 2
+        for i, card in enumerate(opponent_hand):
             x = i - center_offset
             x = x * _Settings.CARD_RECT.width
             y = _Settings.CARD_RECT.height
@@ -147,6 +156,8 @@ class CardsRenderer:
             card_rect.centerx = x + self.menu.client.screen_size[0] / 2
             card_rect.centery = y
 
+            if flip_state == 0 and card_rect.collidepoint(pg.mouse.get_pos()):
+                flip_state = 1
             display.blit(card[flip_state], card_rect)
     
     def _render_my_coins(self, display: pg.Surface):

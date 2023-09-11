@@ -397,7 +397,8 @@ class GameMenu(Menu):
 
         self.moveable_effects = res['moveable_effects']
         self.static_effects = res['static_effects']
-        self.side_effects = res['side_effects']
+        self.my_side_effects = res['my_side_effects']
+        self.opponent_side_effects = res['opponent_side_effects']
 
         self.moveable_pieces = np.full((8,8), False)
         self.possible_moves = np.full((8,8), False)
@@ -501,6 +502,9 @@ class GameMenu(Menu):
                                 res = self.client.send_req(req)
                                 self.card_queue = np.array(res['card_queue']).reshape(-1,2)
                                 self.cards_renderer.pickup_card = -1
+
+                                self.my_side_effects = res['my_side_effects']
+                                self.opponent_side_effects = res['opponent_side_effects']
 
                             elif self.moveable_pieces[rank,file] and self.board_renderer.holding[0] == -1:
                                 self.board_renderer.holding = [rank, file]
