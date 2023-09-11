@@ -13,6 +13,7 @@ def get_circle(radius: float, color: tuple[int, int, int]) -> pg.Surface:
     surf.set_colorkey((0, 0, 0))
     return surf
 
+
 def get_spark(minor_axis: float, major_axis: float, pos: 'np.ndarray[np.float32]', 
               angle: float) -> list['np.ndarray[np.float32]']:
     norm_angle = angle + math.pi/2
@@ -23,6 +24,7 @@ def get_spark(minor_axis: float, major_axis: float, pos: 'np.ndarray[np.float32]
         pos + minor_axis/2 * np.array([math.cos(norm_angle), math.sin(norm_angle)]),
     ]
     return points
+
 
 class Sparks:
     def __init__(self, anchor: tuple[int, int], glow: tuple[int, int, int], groups: int=1):
@@ -71,3 +73,27 @@ class Sparks:
             glow = get_circle(major_axis, self.glow)
             drawpos = np.array(drawpos) - np.array([major_axis, major_axis])
             display.blit(glow, drawpos, special_flags=pg.BLEND_RGB_ADD)
+
+
+class Bolt:
+    def __init__(self, start: np.ndarray, end: np.ndarray, colour: tuple, t: float):
+        self.endpoints = np.array([start, end])
+        self.pos = start
+        self.vel = (end - start) / t
+        self.sparks = Sparks(self.pos, colour, 2)
+    
+    def update(self, dt: float):
+        self.pos = self.pos + self.vel * dt
+        if not np.all(np.logical_and(
+                np.min(self.endpoints, axis=0) <= self.pos,
+                self.pos <= np.max(self.endpoints, axis=0)
+            )
+        ):
+            self.pos = self.endpoints[1]
+            self.sparks.update(dt, self.pos, should_spawn=False)
+            return True
+        self.sparks.update(dt, self.pos)
+        return False
+    
+    def render(self, display: pg.Surface):
+        self.sparks.render(display)
