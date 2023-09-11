@@ -1,336 +1,188 @@
 import pygame as pg
+import numpy as np
 
-WHITE_PIECES = 'PNBRQK'
-BLACK_PIECES = 'pnbrqk'
-TILESIZE = 48
+from ..util.asset_loader import load_json, load_spritesheet
 
-class Board:
-    def __init__(self, menu, fen_str: str, occupy: list[int]):
-        self.width, self.height = menu.width, menu.height
-        self.display : pg.Surface = menu.displays['default']
-        self.piece_collection : dict[str, dict[str, pg.Surface]] = menu.piece_collection
-        self.white_palette = menu.white_theme
-        self.black_palette = menu.black_theme
-        self.menu = menu
 
-        self.update_board_state(fen_str, occupy, (-1, -1))
+class _Settings:
+    TILESIZE = 32
 
-        # board display
-        self.board_surf = pg.Surface((TILESIZE * 8, TILESIZE * 8))
-        self.flip = self.menu.p_side == 'b'
-        self.draw_board_surf(flip=self.flip)
-        self.board_rect = self.board_surf.get_rect()
-        self.board_rect.centerx = self.width/2
-        self.board_rect.centery = self.height/2
+    COLOUR_THEMES = load_json('./assets/chess/colour_themes.json')
+
+    EMPTY = 0
+
+
+def _get_paletted_pieces(
+    pieces: dict[int, pg.Surface], 
+    colour_theme: dict, 
+    neg: int = 1
+):
+    paletted_pieces = {}
+    for piece_enum, piece_surf in pieces.items():
+        paletted_piece_surf = pg.Surface(piece_surf.get_size())
+        paletted_piece_surf.fill(colour_theme['main'])
+        paletted_piece_surf.blit(piece_surf, (0,0))
+        paletted_piece_surf.set_colorkey((0,0,0))
         
-        self.hovered_square = -1
-        self.prev_square = -1
-        self.held_piece = ''
-        self.legal_moves = set()
-        self.spell_targets = set()
-        self.displacements = set()
+        paletted_pieces[neg * piece_enum] = paletted_piece_surf
+    
+    return paletted_pieces
 
-    def update_board_state(self, fen_str: str, occupy: list[int], queued_move: tuple[int, int]):
-        self.board : list[str] = []
-        self.read_fen_str(fen_str)
-        self.occupied = set(occupy) # dont even know if i'll need
 
-        self.queued_move = queued_move
+class BoardRenderer:
+    def __init__(self, menu):
+        self.menu = menu
+        self._create_checker_board()
+        self._create_pieces()
+        self.clear_animation()
 
-    def update_legal_moves(self, legal_moves: list[int]):
-        self.legal_moves = set(legal_moves)
+    def clear_animation(self):
+        self.slide_vel = np.zeros(2,np.float32)
+        self.movement = np.full((2,2), -1)
 
-    def draw_board_surf(self, flip: bool=False):
-        for i, _ in enumerate(self.board):
-            x = i % 8
-            y = i // 8
-            if flip:
-                if (x + y) % 2 == 1:
-                    pg.draw.rect(self.board_surf, (214, 153, 255), 
-                                pg.Rect(x * TILESIZE, y * TILESIZE, TILESIZE, TILESIZE))
+    def _create_checker_board(self):
+        self.checker_board = pg.Surface((_Settings.TILESIZE * 8, _Settings.TILESIZE * 8))
+        self.colour_theme = _Settings.COLOUR_THEMES[self.menu.theme]
+        self.other_colour_theme = _Settings.COLOUR_THEMES[self.menu.other_theme]
+
+        for rank in np.arange(8):
+            for file in np.arange(8):
+                if (rank + file) % 2 == 0:
+                    colour = self.colour_theme['light']
                 else:
-                    pg.draw.rect(self.board_surf, (52, 18, 74), 
-                                pg.Rect(x * TILESIZE, y * TILESIZE, TILESIZE, TILESIZE))
-            else:
-                if (x + y) % 2 == 0:
-                    pg.draw.rect(self.board_surf, (214, 153, 255), 
-                                pg.Rect(x * TILESIZE, y * TILESIZE, TILESIZE, TILESIZE))
-                else:
-                    pg.draw.rect(self.board_surf, (52, 18, 74), 
-                                pg.Rect(x * TILESIZE, y * TILESIZE, TILESIZE, TILESIZE))
+                    colour = self.colour_theme['dark']
+                pg.draw.rect(
+                    self.checker_board,
+                    colour,
+                    pg.Rect(
+                        rank * _Settings.TILESIZE,
+                        file * _Settings.TILESIZE,
+                        _Settings.TILESIZE,
+                        _Settings.TILESIZE
+                    )
+                )
+        
+        self.board_rect = self.checker_board.get_rect()
+        self.board_rect.center = (np.array(self.menu.client.screen_size) / 2)
 
-    def read_fen_str(self, fen_str: str):
-        # read the fen_str
-        data = fen_str.split(' ')
-        position = data[0]
-        self.castling_priv = {
-            char: char in data[2] for char in 'KQkq'
+    def _create_pieces(self):
+        pieces = load_spritesheet(
+            './assets/chess/pieces.png', 
+            [1,2,3,4,5,6],
+            scale=2,
+            colorkey=(0,255,0)
+        )
+        self.pieces = {
+            **_get_paletted_pieces(pieces, self.colour_theme),
+            **_get_paletted_pieces(pieces, self.other_colour_theme, -1)
         }
-        self.en_passant = int(data[3])
-        self.half_moves = int(data[4])
-        self.full_moves = int(data[5])
-        self.king_positions = [-1, -1]
 
-        square_index = 0
-        for char in position:
-            if char in WHITE_PIECES:
-                self.board.append(char)
-                if char == 'K':
-                    self.king_positions[0] = square_index
-                square_index += 1
-            elif char in BLACK_PIECES:
-                self.board.append(char)
-                if char == 'k':
-                    self.king_positions[1] = square_index
-                square_index += 1
-            elif char == '/':
-                continue
-            else:
-                num_empty = int(char)
-                for i in range(num_empty):
-                    self.board.append('')
-                square_index += num_empty
+        self.hovering = [-1,-1]
+        self.holding = [-1, -1]
 
-    def input(self, events: list[pg.Event]) -> dict:
-        req = {}
-        for event in events:
-            if event.type == pg.MOUSEMOTION:
-                zeroed_x = event.pos[0] - self.board_rect.left
-                zeroed_y = event.pos[1] - self.board_rect.top
-                chunked_x = zeroed_x // TILESIZE
-                if self.flip:
-                    chunked_y = 7 - zeroed_y // TILESIZE
-                else:
-                    chunked_y = zeroed_y // TILESIZE
-                if (chunked_x < 0 or chunked_x >= 8) or (chunked_y < 0 or chunked_y >= 8):
-                    self.hovered_square = -1
-                else:
-                    self.hovered_square = chunked_x + chunked_y * 8
-            if event.type == pg.MOUSEBUTTONDOWN:
-                if self.menu.p_hand.new_card_in_queue is None:
-                    if self.held_piece:
-                        if self.hovered_square in self.legal_moves:
-                            # send data to server to make a move
-                            req = {
-                                'req_type': 'move_piece',
-                                'p_side': self.menu.p_side,
-                                'move': [self.prev_square, self.hovered_square]
-                            }
-                            self.prev_square = -1
-                            self.held_piece = ''
-                            self.legal_moves = set()
-                        else:
-                            self.prev_square = -1
-                            self.held_piece = ''
-                            self.legal_moves = set()
-                    elif self.hovered_square in self.occupied:
-                        # send data to server to retrieve info about legal moves
-                        req = {
-                            'req_type': 'pickup',
-                            'square': self.hovered_square
-                        }
-                        self.prev_square = self.hovered_square
-                        self.held_piece = self.board[self.hovered_square]
-        return req
+        self.piece_rects = [
+            [
+                pg.Rect(
+                    file * _Settings.TILESIZE, 
+                    (rank - 1) * _Settings.TILESIZE, 
+                    _Settings.TILESIZE, 
+                    2 * _Settings.TILESIZE
+                ) 
+                for file in np.arange(8)
+            ]
+            for rank in np.arange(8)
+        ]
 
-    def render_pieces(self):
-        displace_from = [displacement[0] for displacement in self.displacements]
-        displace_to = [displacement[1] for displacement in self.displacements]
+    def _render_pieces(self, display: pg.Surface):
+        fixed = self.menu.board_state == self.menu.dummy_board_state
+        for rank, state_row in enumerate(self.menu.board_state):
+            for file, tile in enumerate(state_row):
+                if np.all(np.array([rank,file]) == self.movement[1]):
+                    continue
 
-        if self.flip:
-            for square_index in range(len(self.board)-1, -1, -1):
-                square = self.board[square_index]
-                if square and square_index != self.queued_move[0] and square_index not in displace_from:
-                    # square != 0
-                    # square_index is not the queued move
-                    # square index is not a displaced piece
-                    piece = square.lower()
-                    x = (square_index % 8 + 0.5) * TILESIZE + self.board_rect.left
-                    y = (7 - square_index // 8 + 0.85) * TILESIZE + self.board_rect.top
-                    if square_index == self.hovered_square:
-                        y -= TILESIZE / 2
-                    if 'a' <= square and square <= 'z':
-                        piece_surf = self.piece_collection[self.black_palette][piece]
-                    else:
-                        piece_surf = self.piece_collection[self.white_palette][piece]
-                    piece_rect = piece_surf.get_rect()
-                    piece_rect.centerx = x
-                    piece_rect.bottom = y
-                    if square_index == self.hovered_square:
-                        shadow = pg.Surface((TILESIZE, TILESIZE))
-                        pg.draw.circle(shadow, (50, 50, 50), (TILESIZE/2, TILESIZE/2), 0.35 * TILESIZE)
-                        shadow.set_colorkey((0, 0, 0))
-                        shadow_rect = shadow.get_rect()
-                        shadow_rect.centerx = x
-                        shadow_rect.centery = y + 0.15 * TILESIZE
-                        self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
-                    self.display.blit(piece_surf, piece_rect)
-
-            for index in range(len(displace_to)-1, -1, -1):
-                square_index = displace_to[index]
-                if square_index == -1:
-                    square_index = displace_from[index]
-                square = self.board[displace_from[index]]
-                piece = square.lower()
-                x = (square_index % 8 + 0.5) * TILESIZE + self.board_rect.left
-                y = (7 - square_index // 8 + 0.35) * TILESIZE + self.board_rect.top
-                if 'a' <= square and square <= 'z':
-                    piece_surf = self.piece_collection[self.black_palette][piece]
-                else:
-                    piece_surf = self.piece_collection[self.white_palette][piece]
-                piece_rect = piece_surf.get_rect()
-                piece_rect.centerx = x
-                piece_rect.bottom = y
-                shadow = pg.Surface((TILESIZE, TILESIZE))
-                pg.draw.circle(shadow, (50, 50, 50), (TILESIZE/2, TILESIZE/2), 0.35 * TILESIZE)
-                shadow.set_colorkey((0, 0, 0))
-                shadow_rect = shadow.get_rect()
-                shadow_rect.centerx = x
-                shadow_rect.centery = y + 0.15 * TILESIZE
-                self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
-                self.display.blit(piece_surf, piece_rect)
-
-            # queued move
-            if self.queued_move[1] != -1:
-                x = (self.queued_move[1] % 8 + 0.5) * TILESIZE + self.board_rect.left
-                y = (7 - self.queued_move[1] // 8 + 0.85) * TILESIZE + self.board_rect.top - TILESIZE / 2
-                square = self.board[self.queued_move[0]]
-                piece = square.lower()
-                if 'a' <= square and square <= 'z':
-                    piece_surf = self.piece_collection[self.black_palette][piece]
-                else:
-                    piece_surf = self.piece_collection[self.white_palette][piece]
-                piece_rect = piece_surf.get_rect()
-                piece_rect.centerx = x
-                piece_rect.bottom = y
-                shadow = pg.Surface((TILESIZE, TILESIZE))
-                pg.draw.circle(shadow, (50, 50, 50), (TILESIZE/2, TILESIZE/2), 0.35 * TILESIZE)
-                shadow.set_colorkey((0, 0, 0))
-                shadow_rect = shadow.get_rect()
-                shadow_rect.centerx = x
-                shadow_rect.centery = y + 0.15 * TILESIZE
-                self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
-                self.display.blit(piece_surf, piece_rect)
-        else:
-            for i, square in enumerate(self.board):
-                if square and i != self.queued_move[0] and i not in displace_from:
-                    piece = square.lower()
-                    x = (i % 8 + 0.5) * TILESIZE + self.board_rect.left
-                    y = (i // 8 + 0.85) * TILESIZE + self.board_rect.top
-                    if i == self.hovered_square:
-                        y -= TILESIZE / 2
-                    if 'a' <= square and square <= 'z':
-                        piece_surf = self.piece_collection[self.black_palette][piece]
-                    else:
-                        piece_surf = self.piece_collection[self.white_palette][piece]
-                    piece_rect = piece_surf.get_rect()
-                    piece_rect.centerx = x
-                    piece_rect.bottom = y
-                    if i == self.hovered_square:
-                        shadow = pg.Surface((TILESIZE, TILESIZE))
-                        pg.draw.circle(shadow, (50, 50, 50), (TILESIZE/2, TILESIZE/2), 0.35 * TILESIZE)
-                        shadow.set_colorkey((0, 0, 0))
-                        shadow_rect = shadow.get_rect()
-                        shadow_rect.centerx = x
-                        shadow_rect.centery = y + 0.15 * TILESIZE
-                        self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
-                    self.display.blit(piece_surf, piece_rect)
-            
-            for index, square_index in enumerate(displace_to):
-                square = self.board[displace_from[index]]
-                if square_index == -1:
-                    square_index = displace_from[index]
-                piece = square.lower()
-                x = (square_index % 8 + 0.5) * TILESIZE + self.board_rect.left
-                y = (square_index // 8 + 0.35) * TILESIZE + self.board_rect.top
-                if 'a' <= square and square <= 'z':
-                    piece_surf = self.piece_collection[self.black_palette][piece]
-                else:
-                    piece_surf = self.piece_collection[self.white_palette][piece]
-                piece_rect = piece_surf.get_rect()
-                piece_rect.centerx = x
-                piece_rect.bottom = y
-                shadow = pg.Surface((TILESIZE, TILESIZE))
-                pg.draw.circle(shadow, (50, 50, 50), (TILESIZE/2, TILESIZE/2), 0.35 * TILESIZE)
-                shadow.set_colorkey((0, 0, 0))
-                shadow_rect = shadow.get_rect()
-                shadow_rect.centerx = x
-                shadow_rect.centery = y + 0.15 * TILESIZE
-                self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
-                self.display.blit(piece_surf, piece_rect)
-
-            # queued move
-            if self.queued_move[1] != -1:
-                x = (self.queued_move[1] % 8 + 0.5) * TILESIZE + self.board_rect.left
-                y = (self.queued_move[1] // 8 + 0.85) * TILESIZE + self.board_rect.top - TILESIZE / 2
-                square = self.board[self.queued_move[0]]
-                piece = square.lower()
-                if 'a' <= square and square <= 'z':
-                    piece_surf = self.piece_collection[self.black_palette][piece]
-                else:
-                    piece_surf = self.piece_collection[self.white_palette][piece]
-                piece_rect = piece_surf.get_rect()
-                piece_rect.centerx = x
-                piece_rect.bottom = y
-                shadow = pg.Surface((TILESIZE, TILESIZE))
-                pg.draw.circle(shadow, (50, 50, 50), (TILESIZE/2, TILESIZE/2), 0.35 * TILESIZE)
-                shadow.set_colorkey((0, 0, 0))
-                shadow_rect = shadow.get_rect()
-                shadow_rect.centerx = x
-                shadow_rect.centery = y + 0.15 * TILESIZE
-                self.display.blit(shadow, shadow_rect, special_flags=pg.BLEND_RGB_SUB)
-                self.display.blit(piece_surf, piece_rect)
-
-    def render_held_piece(self):
-        if self.held_piece:
-            piece = self.held_piece.lower()
-            x = pg.mouse.get_pos()[0]
-            y = pg.mouse.get_pos()[1] + 0.35 * TILESIZE
-            if 'a' <= self.held_piece and self.held_piece <= 'z':
-                piece_surf = self.piece_collection[self.black_palette][piece]
-            else:
-                piece_surf = self.piece_collection[self.white_palette][piece]
-            piece_rect = piece_surf.get_rect()
-            piece_rect.centerx = x
-            piece_rect.bottom = y
-
-            self.display.blit(piece_surf, piece_rect)
+                if fixed[rank,file]:
+                    self.piece_rects[rank][file].topleft = [
+                        file * _Settings.TILESIZE,
+                        (rank - 1) * _Settings.TILESIZE
+                    ]
                 
-    def render_legal_moves(self):
-        if self.legal_moves:
-            if self.flip:
-                for legal_move in self.legal_moves:
-                    x = legal_move % 8 * TILESIZE + self.board_rect.left
-                    y = (7 - legal_move // 8) * TILESIZE + self.board_rect.top
-                    pg.draw.rect(self.display, (255, 255, 255),
-                                pg.Rect(x, y, TILESIZE, TILESIZE))
+                if tile == _Settings.EMPTY:
+                    continue
+                
+                if self.holding[0] == rank and self.holding[1] == file:
+                    self.piece_rects[rank][file].center = pg.mouse.get_pos() - np.array(self.board_rect.topleft)
+                elif (self.hovering[0] == rank and self.hovering[1] == file and self.holding[0] == -1):
+                    self.piece_rects[rank][file].top = (rank - 2) * _Settings.TILESIZE
+                
+                self.piece_rects[rank][file].topleft = self.piece_rects[rank][file].topleft + np.array(self.board_rect.topleft)
+
+                piece = self.pieces[tile]
+
+                drawpos = self.piece_rects[rank][file].topleft
+                
+                display.blit(piece, drawpos)
+
+    def _render_possible_moves(self, display: pg.Surface):
+        for rank, row in enumerate(self.menu.possible_moves):
+            for file, tile in enumerate(row):
+                if tile:
+                    drawpos = (
+                        np.array(self.board_rect.center) + 
+                        (np.array([file, rank]) - 7 / 2) * _Settings.TILESIZE
+                    )
+                    pg.draw.circle(
+                        display, 
+                        (0, 255, 0),
+                        drawpos,
+                        _Settings.TILESIZE / 4
+                    )
+
+    def render(self, display: pg.Surface):
+        display.blit(
+            self.checker_board,
+            self.board_rect
+        )
+
+        self._render_possible_moves(display)
+        self._render_pieces(display)
+
+    def create_board_move_animation(self, t: float):
+        fixed = self.menu.board_state == self.menu.dummy_board_state
+        different = np.column_stack(np.where(np.invert(fixed)))
+        if different.size == 0:
+            return
+
+        if different.shape[0] > 2:
+            ...
+        else:
+            if self.menu.dummy_board_state[tuple(different[0])] == _Settings.EMPTY:
+                # moved from 0
+                self.movement = different.copy()
+                self.slide_vel = np.diff(self.movement, axis=0) * _Settings.TILESIZE / t
             else:
-                for legal_move in self.legal_moves:
-                    x = legal_move % 8 * TILESIZE + self.board_rect.left
-                    y = legal_move // 8 * TILESIZE + self.board_rect.top
-                    pg.draw.rect(self.display, (255, 255, 255),
-                                pg.Rect(x, y, TILESIZE, TILESIZE))
+                # moved from 1
+                self.movement = different[::-1]
+                self.slide_vel = np.diff(self.movement, axis=0) * _Settings.TILESIZE / t
+            self.slide_vel = self.slide_vel[0,::-1]
 
-    def render_spell_targets(self):
-        if self.spell_targets:
-            if self.flip:
-                for spell_target in self.spell_targets:
-                    x = spell_target % 8 * TILESIZE + self.board_rect.left
-                    y = (7 - spell_target // 8) * TILESIZE + self.board_rect.top
-                    pg.draw.rect(self.display, (255, 255, 255),
-                                pg.Rect(x, y, TILESIZE, TILESIZE))
-            else:
-                for spell_target in self.spell_targets:
-                    x = spell_target % 8 * TILESIZE + self.board_rect.left
-                    y = spell_target // 8 * TILESIZE + self.board_rect.top
-                    pg.draw.rect(self.display, (255, 255, 255),
-                                pg.Rect(x, y, TILESIZE, TILESIZE))
+    def animate_board_move(self, dt: float):
+        if self.movement[0][0] != -1:
+            rank,file = self.movement[0]
+            xy = self.piece_rects[rank][file].topleft - np.array(self.board_rect.topleft) + self.slide_vel * dt
 
-    def render(self):
-        self.display.blit(self.board_surf, self.board_rect)
-        self.render_legal_moves()
-        self.render_spell_targets()
-        # self.render_checked_squares()
-        self.render_pieces()
-        self.render_held_piece()
+            if not np.all(np.logical_and(
+                    (np.min(self.movement[:,::-1], axis=0) - np.array([0,1])) * _Settings.TILESIZE <= xy,
+                    xy <= (np.max(self.movement[:,::-1], axis=0) - np.array([0,1]))  * _Settings.TILESIZE
+                )
+            ):
+                xy = (self.movement[1,::-1] - np.array([0,1])) * _Settings.TILESIZE
+                self.menu.board_state = self.menu.dummy_board_state
+                self.clear_animation()
+            
+            self.piece_rects[rank][file].topleft = xy
+                
+    def create_death_animation(self, t: float):
+        ...
 
+    def animate_death(self, dt: float):
+        self.menu.board_state = self.menu.dummy_board_state
