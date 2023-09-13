@@ -178,7 +178,17 @@ Inputs:
     def _clear_input(self):
         self.input_ranks = np.full(2, -1, np.int32)
         self.input_files = np.full(2, -1, np.int32)
+
+        self.moveable_pieces = np.full((8,8), 0)
         self.possible_moves = np.full((8,8), 0)
+
+    def _get_possible_moves(self, effects_manager, **kwargs):
+        self.possible_moves = _get_possible_moves(
+            self.input_ranks[0], 
+            self.input_files[0], 
+            self, 
+            effects_manager
+        )
 
     ### user request ###
     def get_moveable_pieces(self, effects_manager, **kwargs):
@@ -192,22 +202,14 @@ Inputs:
                     else:
                         self.moveable_pieces[rank,file] = tile * self.side > 0
 
-    def get_possible_moves(self, effects_manager, **kwargs):
-        self.possible_moves = _get_possible_moves(
-            self.input_ranks[0], 
-            self.input_files[0], 
-            self, 
-            effects_manager
-        )
-    
     def pickup_piece(self, rank: int, file: int, effects_manager, **kwargs):
         if self.moveable_pieces[rank,file]:
             self.input_ranks[0] = rank
             self.input_files[0] = file
-            self.get_possible_moves(effects_manager)
+            self._get_possible_moves(effects_manager)
             return True
         return False
-
+    
     def lock_in_move(self, rank: int, file: int, **kwargs):
         if self.possible_moves[rank,file]:
             self.input_ranks[1] = rank
@@ -215,6 +217,9 @@ Inputs:
             return True
         return False
     
+    def move_locked_in(self):
+        return self.input_ranks[1] != -1
+
     def make_move(self, effects_manager):
         # ensure move is valid
         if not self.move_locked_in():
@@ -223,7 +228,7 @@ Inputs:
         rank1, rank2 = self.input_ranks
         file1, file2 = self.input_files
 
-        self.get_possible_moves(effects_manager)
+        self._get_possible_moves(effects_manager)
         if self.possible_moves[rank2,file2]:
             
             # update enpassant
@@ -256,34 +261,34 @@ Inputs:
                 if rank1 == 7 and self.side == 1:
                     if file1 == 7:
                         # white kingside castle
-                        self.castling_priv[0][0] = False
+                        self.castling_priv[1][0] = False
                     elif file1 == 0:
                         # white queenside castle
-                        self.castling_priv[0][1] = False
+                        self.castling_priv[1][1] = False
                 elif rank1 == 0 and self.side == -1:
                     if file1 == 7:
                         # black kingside castle
-                        self.castling_priv[1][0] = False
+                        self.castling_priv[-1][0] = False
                     elif file1 == 0:
                         # black queenside castle
-                        self.castling_priv[1][1] = False
+                        self.castling_priv[-1][1] = False
             
             # rook capture prevents castling
             if np.abs(self.board_state[rank2,file2]) == Piece.ROOK:
                 if rank2 == 7:
                     if file2 == 7:
                         # white kingside castle
-                        self.castling_priv[0][0] = False
-                    elif file2 == 0:
-                        # white queenside castle
-                        self.castling_priv[0][1] = False
-                elif rank2 == 0:
-                    if file2 == 7:
-                        # white kingside castle
                         self.castling_priv[1][0] = False
                     elif file2 == 0:
                         # white queenside castle
                         self.castling_priv[1][1] = False
+                elif rank2 == 0:
+                    if file2 == 7:
+                        # white kingside castle
+                        self.castling_priv[-1][0] = False
+                    elif file2 == 0:
+                        # white queenside castle
+                        self.castling_priv[-1][1] = False
 
             # movement chain
             if (self.move_chains[self.side].size > 0 and 
@@ -322,10 +327,21 @@ Inputs:
             return True
         return False
     
-    ### external use ###
-    def move_locked_in(self):
-        return self.input_ranks[0] != -1
+    def end_turn(self, effects_manager):
+        if not np.any(self.board_state == 1):
+            self.winner = -1
+        if not np.any(self.board_state == -1):
+            if self.winner is None:
+                self.winner = 1
+            else:
+                self.winner = 0
+        
+        if self.winner is None:
+            self.side *= -1
+            self.full_moves += 1
+            self._get_attacked_squares(effects_manager)
 
+    ### external use ###
     def spell_move(self, old_tile: np.ndarray, new_tile: np.ndarray, slide: bool = False):
         if slide:
             rank1,file1 = old_tile
@@ -358,20 +374,6 @@ Inputs:
     def repair_tile(self, rank: int, file: int):
         mask = np.invert(np.logical_and(self.removed_tiles[:,0] == rank, self.removed_tiles[:,1] == file))
         self.removed_tiles = self.removed_tiles[mask]
-
-    def end_turn(self, effects_manager):
-        if not np.any(self.board_state == 1):
-            self.winner = -1
-        if not np.any(self.board_state == -1):
-            if self.winner is None:
-                self.winner = 1
-            else:
-                self.winner = 0
-        
-        if self.winner is None:
-            self.side *= -1
-            self.full_moves += 1
-            self._get_attacked_squares(effects_manager)
 
 
 def _get_possible_moves(rank: int, file: int, board_manager: BoardManager, effects_manager):
@@ -995,14 +997,27 @@ Black Queue: {self.black_queue}"""
                     file,
                     self.card_data[card_id]['effect_id']
                 )
+                mask = np.full(self.white_hand.size, True)
+                mask[card_index] = False
+                self.white_hand = self.white_hand[mask]
+                self.white_queue = self.white_queue[mask]
             else:
                 # queue target at the index
                 self.white_queue[card_index] = [rank, file]
             return self.white_queue
         else:
-            card_id = self.white_hand[card_index]
+            card_id = self.black_hand[card_index]
             if self.card_data[card_id]['speed'] == 0:
-                ...
+                effects_manager.inflict_side_effect(
+                    side, 
+                    rank, 
+                    file,
+                    self.card_data[card_id]['effect_id']
+                )
+                mask = np.full(self.black_hand.size, True)
+                mask[card_index] = False
+                self.black_hand = self.black_hand[mask]
+                self.black_queue = self.black_queue[mask]
             else:
                 self.black_queue[card_index] = [rank, file]
             return self.black_queue
@@ -1068,28 +1083,6 @@ Black Queue: {self.black_queue}"""
             self.black_coins = [*fast, *slow]
 
         self._clear_queues()
-
-    def pickup_card(self, side: int, card_index: int, effects_manager: EffectsManager):
-        if side > 0:
-            card_id = self.white_hand[card_index]
-        else:
-            card_id = self.black_hand[card_index]
-        
-        if self.card_data[card_id]['speed'] == 0:
-            effect_id = self.card_data[card_id]['effect_id']
-            if effect_id in ['backfire']: # TODO: backfire should actually do something
-                effects_manager.inflict_side_effect(-side, {
-                    'name': effect_id,
-                    'duration': -1,
-                })
-            elif effect_id in ['reveal']:
-                effects_manager.inflict_side_effect(-side, {
-                    'name': effect_id,
-                    'duration': 1
-                })
-            return True
-        return False
-
 
 class GameState:
     def __init__(self):
@@ -1200,12 +1193,6 @@ class GameState:
                 'status': 'success',
                 'moveable_pieces': self.board_manager.moveable_pieces.flatten().astype(int).tolist()
             }
-        elif req['endpoint'] == 'possible_moves':
-            self.board_manager.get_possible_moves(self.effects_manager)
-            return {
-                'status': 'success',
-                'possible_moves': self.board_manager.possible_moves.flatten().astype(int).tolist()
-            }
         elif req['endpoint'] == 'card_queue':
             card_queues = {
                 1: self.hands_manager.white_queue.flatten().tolist(),
@@ -1240,8 +1227,13 @@ class GameState:
         elif req['endpoint'] == 'queue_card':
             card_queue = self.hands_manager.queue_card(side, **params)
             side_effects = self.effects_manager.get_side_effects_json()
+            hands = {
+                1: self.hands_manager.white_hand.tolist(),
+                -1: self.hands_manager.black_hand.tolist()
+            }
             return {
                 'status': 'success',
+                'my_hand': hands[side],
                 'card_queue': card_queue.flatten().tolist(),
                 'my_side_effects': side_effects[side],
                 'opponent_side_effects': side_effects[-side],

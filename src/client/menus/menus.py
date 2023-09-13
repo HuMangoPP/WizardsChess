@@ -501,6 +501,7 @@ class GameMenu(Menu):
                                 }
                                 res = self.client.send_req(req)
                                 self.card_queue = np.array(res['card_queue']).reshape(-1,2)
+                                self.my_hand = np.array(res['my_hand'])
                                 self.cards_renderer.pickup_card = -1
 
                                 self.my_side_effects = res['my_side_effects']
