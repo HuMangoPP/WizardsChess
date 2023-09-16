@@ -169,7 +169,7 @@ Inputs:
                 self.board_state.append(Piece.PIECE_MAP[c])
         self.board_state = np.array(self.board_state).reshape(8,8)
 
-        self.removed_tiles = np.full((8,8), 0)
+        self.removed_tiles = np.full((8,8), False)
 
     def _get_attacked_squares(self, effects_manager):
         self.white_attacking = _get_attacked_squares(1, self, effects_manager)
@@ -190,7 +190,7 @@ Inputs:
             effects_manager
         )
 
-    ### user request ###
+    ### api ###
     def get_moveable_pieces(self, effects_manager, **kwargs):
         self.moveable_pieces = np.full((8,8), 0)
         for rank, row in enumerate(self.board_state):
@@ -256,40 +256,18 @@ Inputs:
                 # no castling
                 self.castling_priv[self.side] = [False, False]
 
-            # rook movement prevents castling
-            if np.abs(self.board_state[rank1,file1]) == Piece.ROOK:
-                if rank1 == 7 and self.side == 1:
-                    if file1 == 7:
-                        # white kingside castle
-                        self.castling_priv[1][0] = False
-                    elif file1 == 0:
-                        # white queenside castle
-                        self.castling_priv[1][1] = False
-                elif rank1 == 0 and self.side == -1:
-                    if file1 == 7:
-                        # black kingside castle
-                        self.castling_priv[-1][0] = False
-                    elif file1 == 0:
-                        # black queenside castle
-                        self.castling_priv[-1][1] = False
+            if np.any(self.input_ranks == 0):
+                if np.any(self.input_files == 0):
+                    self.castling_priv[-1][1] = False
+                if np.any(self.input_files == 7):
+                    self.castling_priv[-1][0] = False
             
-            # rook capture prevents castling
-            if np.abs(self.board_state[rank2,file2]) == Piece.ROOK:
-                if rank2 == 7:
-                    if file2 == 7:
-                        # white kingside castle
-                        self.castling_priv[1][0] = False
-                    elif file2 == 0:
-                        # white queenside castle
-                        self.castling_priv[1][1] = False
-                elif rank2 == 0:
-                    if file2 == 7:
-                        # white kingside castle
-                        self.castling_priv[-1][0] = False
-                    elif file2 == 0:
-                        # white queenside castle
-                        self.castling_priv[-1][1] = False
-
+            if np.any(self.input_ranks == 7):
+                if np.any(self.input_files == 0):
+                    self.castling_priv[1][1] = False
+                if np.any(self.input_files == 7):
+                    self.castling_priv[1][0] = False
+            
             # movement chain
             if (self.move_chains[self.side].size > 0 and 
                 np.all(self.move_chains[self.side][-1] == np.array([rank1,file1]))
@@ -312,6 +290,8 @@ Inputs:
             # move piece
             self.board_state[rank2,file2] = self.board_state[rank1,file1]
             self.board_state[rank1,file1] = Piece.EMPTY
+            effects_manager.moveable_effects[rank2][file2] = effects_manager.moveable_effects[rank1][file1]
+            effects_manager.moveable_effects[rank1][file1] = []
         
         # clear input
         self._clear_input()
@@ -341,13 +321,16 @@ Inputs:
             self.full_moves += 1
             self._get_attacked_squares(effects_manager)
 
-    ### external use ###
-    def spell_move(self, old_tile: np.ndarray, new_tile: np.ndarray, slide: bool = False):
+    ### external helpers ###
+    def spell_move(self, effects_manager, old_tile: np.ndarray, new_tile: np.ndarray, slide: bool = False):
+        rank1,file1 = old_tile
+        rank2,file2 = new_tile
+        input_ranks = np.array([rank1,rank2])
+        input_files = np.array([file1,file2])
+        moved = False
         if slide:
-            rank1,file1 = old_tile
-            rank2,file2 = new_tile
             rank_dir = 1 if rank2 >= rank1 else -1
-            file_dir = 1 if file2 >= file2 else -1
+            file_dir = 1 if file2 >= file1 else -1
 
             ranks = np.arange(rank1,rank2,rank_dir) + rank_dir
             files = np.arange(file1,file2,file_dir) + file_dir
@@ -357,23 +340,34 @@ Inputs:
                 files = np.full_like(ranks, file1)
             
             if np.all(self.board_state[ranks,files] == Piece.EMPTY):
-                self.board_state[tuple(new_tile)] = self.board_state[tuple(old_tile)]
-                self.board_state[tuple(old_tile)] = Piece.EMPTY
+                moved = True
         else:
             if self.board_state[tuple(new_tile)] == Piece.EMPTY:
-                self.board_state[tuple(new_tile)] = self.board_state[tuple(old_tile)]
-                self.board_state[tuple(old_tile)] = Piece.EMPTY
+                moved = True
+        
+        if moved:
+            self.board_state[tuple(new_tile)] = self.board_state[tuple(old_tile)]
+            self.board_state[tuple(old_tile)] = Piece.EMPTY
+
+            effects_manager.moveable_effects[rank2][file2] = effects_manager.moveable_effects[rank1][file1]
+            effects_manager.moveable_effects[rank1][file1] = []
+
+            if np.any(input_ranks == 0):
+                if np.any(input_files == 0):
+                    self.castling_priv[-1][1] = False
+                if np.any(input_files == 0):
+                    self.castling_priv[-1][0] = False
+            if np.any(input_ranks == 7):
+                if np.any(input_files == 0):
+                    self.castling_priv[1][1] = False
+                if np.any(input_files == 7):
+                    self.castling_priv[1][0] = False
 
     def remove_tile(self, rank: int, file: int):
-        if not np.logical_and(self.removed_tiles[:,0] == rank, self.removed_tiles[:,1] == file):
-            self.removed_tiles = np.array([
-                *self.removed_tiles,
-                [rank, file]
-            ])
+        self.removed_tiles[rank,file] = True
     
     def repair_tile(self, rank: int, file: int):
-        mask = np.invert(np.logical_and(self.removed_tiles[:,0] == rank, self.removed_tiles[:,1] == file))
-        self.removed_tiles = self.removed_tiles[mask]
+        self.removed_tiles[rank,file] = False
 
 
 def _get_possible_moves(rank: int, file: int, board_manager: BoardManager, effects_manager):
@@ -387,6 +381,19 @@ def _get_possible_moves(rank: int, file: int, board_manager: BoardManager, effec
 
     effects = [moveable_effect.name for moveable_effect in effects_manager.moveable_effects[rank][file]]
     is_shrunk = 'shrink' in effects
+    cannot_capture = []
+    for moveable_row in effects_manager.moveable_effects:
+        temp = []
+        for moveable_effects in moveable_row:
+            effect_ids = [
+                moveable_effect.name for moveable_effect in moveable_effects
+            ]
+            if 'grow' in effect_ids:
+                temp.append(True)
+                continue
+            temp.append(False)
+        cannot_capture.append(temp)
+    cannot_capture = np.array(cannot_capture)
 
     piece = board_state[rank, file]
     if piece > 0:
@@ -398,11 +405,13 @@ def _get_possible_moves(rank: int, file: int, board_manager: BoardManager, effec
     for offset in Piece.OFFSETS.get(abs(piece), []):
         new_tile = np.array([rank, file]) + offset
         if (
-            np.all(np.logical_and(0 <= new_tile, new_tile < 8))
+            np.all(np.logical_and(0 <= new_tile, new_tile < 8)) and
+            not board_manager.removed_tiles[tuple(new_tile)]
         ):
             if (
-                (board_state[new_tile[0], new_tile[1]] * side > 0) or
-                (board_state[new_tile[0], new_tile[1]] * side < 0 and is_shrunk)
+                (board_state[tuple(new_tile)] * side > 0) or
+                (board_state[tuple(new_tile)] * side < 0 and is_shrunk) or
+                (board_state[tuple(new_tile)] * side < 0 and cannot_capture[tuple(new_tile)])
             ):
                 continue
             ranks.append(new_tile[0])
@@ -412,8 +421,14 @@ def _get_possible_moves(rank: int, file: int, board_manager: BoardManager, effec
     for offset in Piece.SLIDE.get(abs(piece), []):
         new_tile = np.array([rank, file]) + offset
         while np.all(np.logical_and(0 <= new_tile, new_tile < 8)):
-            if board_state[new_tile[0], new_tile[1]] != Piece.EMPTY:
-                if board_state[new_tile[0], new_tile[1]] * side < 0 and not is_shrunk:
+            if board_manager.removed_tiles[tuple(new_tile)]:
+                break
+            if board_state[tuple(new_tile)] != Piece.EMPTY:
+                if (
+                    board_state[tuple(new_tile)] * side < 0 and 
+                    not is_shrunk and
+                    not cannot_capture[tuple(new_tile)]
+                ):
                     ranks.append(new_tile[0])
                     files.append(new_tile[1])
                 break
@@ -428,7 +443,8 @@ def _get_possible_moves(rank: int, file: int, board_manager: BoardManager, effec
         # single move
         if (
             np.all(np.logical_and(0 <= new_tile, new_tile < 8)) and
-            board_state[new_tile[0], new_tile[1]] * side == Piece.EMPTY
+            board_state[tuple(new_tile)] * side == Piece.EMPTY and
+            not board_manager.removed_tiles[tuple(new_tile)]
         ):
             ranks.append(new_tile[0])
             files.append(new_tile[1])
@@ -437,14 +453,16 @@ def _get_possible_moves(rank: int, file: int, board_manager: BoardManager, effec
             new_tile = new_tile + offset
             if (
                 (piece > 0 and rank == 6) and
-                board_state[new_tile[0], new_tile[1]] == Piece.EMPTY
+                board_state[tuple(new_tile)] == Piece.EMPTY and 
+                not board_manager.removed_tiles[tuple(new_tile)]
             ):
                 ranks.append(new_tile[0])
                 files.append(new_tile[1])
 
             if (
                 (piece < 0 and rank == 1) and
-                board_state[new_tile[0], new_tile[1]] * side == Piece.EMPTY
+                board_state[tuple(new_tile)] * side == Piece.EMPTY and 
+                not board_manager.removed_tiles[tuple(new_tile)]
             ):
                 ranks.append(new_tile[0])
                 files.append(new_tile[1])
@@ -454,9 +472,10 @@ def _get_possible_moves(rank: int, file: int, board_manager: BoardManager, effec
         new_tile = np.array([rank, file]) + offset
         if (
             np.all(np.logical_and(0 <= new_tile, new_tile < 8)) and 
-            (board_state[new_tile[0], new_tile[1]] * side < 0 or
-             np.all(new_tile == en_passant)) and 
-            not is_shrunk
+            (board_state[tuple(new_tile)] * side < 0 or
+            np.all(new_tile == en_passant)) and 
+            not is_shrunk and 
+            not cannot_capture[tuple(new_tile)]
         ):
             ranks.append(new_tile[0])
             files.append(new_tile[1])
@@ -466,14 +485,16 @@ def _get_possible_moves(rank: int, file: int, board_manager: BoardManager, effec
         if (
             castling_priv[side][0] and 
             np.all([board_state[rank, file + i] == Piece.EMPTY for i in [1,2]]) and
-            np.all([opponent_attacking[rank, file + i] == 0 for i in [0,1,2]])
+            np.all([opponent_attacking[rank, file + i] == 0 for i in [0,1,2]]) and
+            np.all([not board_manager.removed_tiles[rank, file + i] for i in [1,2]])
         ):
             ranks.append(rank)
             files.append(file + 2)
         if (
             castling_priv[side][1] and 
             np.all([board_state[rank, file - i] == Piece.EMPTY for i in [1,2,3]]) and
-            np.all([opponent_attacking[rank, file - i] == 0 for i in [0,1,2]])
+            np.all([opponent_attacking[rank, file - i] == 0 for i in [0,1,2]]) and
+            np.all([not board_manager.removed_tiles[rank, file - i] for i in [1,2,3]])
         ):
             ranks.append(rank)
             files.append(file - 2)
@@ -533,8 +554,16 @@ class Effect:
     def __init__(self, effect_data: dict):
         self.name = effect_data['name']
         self.description = effect_data.get('description', 'No description')
-        self.duration = effect_data.get('duration', 3)
+        self.duration = effect_data.get('duration', 3) * 2
     
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return (
+                self.name == other.name and
+                self.duration == other.duration
+            )
+        return False
+
     def to_json(self):
         return {
             'name': self.name,
@@ -621,33 +650,47 @@ Queued Slow Spells: {self.queued_slow_effects}"""
         
         for side, side_effects in self.side_effects.items():
             for side_effect in side_effects:
-                side_effect.duration -= 1
+                if side_effect.duration >= 0:
+                    side_effect.duration -= 1
             self.side_effects[side] = [
                 side_effect for side_effect in side_effects
                 if side_effect.duration != 0
             ]
 
-    # external use ###
+    def _check_counterspells(self):
+        for rank, moveable_row in enumerate(self.moveable_effects):
+            for file, moveable_effects in enumerate(moveable_row):
+                effect_ids = [moveable_effect.name for moveable_effect in moveable_effects]
+                if 'grow' in effect_ids and 'shrink' in effect_ids:
+                    self.moveable_effects[rank][file] = [
+                        moveable_effect for moveable_effect in moveable_effects 
+                        if moveable_effect.name not in ['grow', 'shrink']
+                    ]
+
+    # external helper functions ###
     def queue_effects(self, fast: list, slow: list):
         self.queued_fast_effects = fast + self.queued_fast_effects
         self.queued_slow_effects = slow + self.queued_slow_effects
 
-    def inflict_side_effect(self, side: int, rank: int, file: int, effect_id: dict):
+    def inflict_side_effect(self, side: int, rank: int, file: int, effect_id: str):
         if effect_id in ['reveal']:
-            self.side_effects[side].append(Effect({
+            self.side_effects[-side].append(Effect({
                 'name': effect_id,
                 'duration': 1
             }))
         elif effect_id in ['backfire']:
-            self.side_effects[side].append(Effect({
+            self.side_effects[-side].append(Effect({
                 'name': effect_id,
                 'duration': -1,
             }))
+        elif effect_id in ['remove_effect']:
+            self.moveable_effects[rank][file] = []
+            self.static_effects[rank][file] = []
+        elif effect_id in ['remove_first']:
+            self.moveable_effects[rank][file] = self.moveable_effects[rank][file][1:]
+            self.static_effects[rank][file] = self.moveable_effects[rank][file][1:]
         else:
-            self.moveable_effects[rank][file].append(Effect({
-                'name': effect_id,
-                'duration': 3,
-            }))
+            ...
 
     def resolve_fast_effects(self, board_manager: BoardManager, hands_manager):
         if len(self.queued_fast_effects) == 0:
@@ -658,6 +701,8 @@ Queued Slow Spells: {self.queued_slow_effects}"""
         effect_id = fast_effect['effect_id'].split('@')
         rank, file = fast_effect['target']
 
+        hands_manager.last_card = fast_effect['card_id']
+
         # effect_id is split along the @, the element after the @ denotes the level
         # of the effect
         if len(effect_id) == 2:
@@ -667,63 +712,78 @@ Queued Slow Spells: {self.queued_slow_effects}"""
         # the first element is a core effect and the second is like a suffix
         effect_id = effect_id[0].split('_')
 
-        # movement spells
-        if effect_id[0] == 'move':
-            offsets = MOVE_SPELL_OFFSETS[effect_id[1]]
-            # move forward or back
-            if effect_id[1] in ['forward', 'back']:
-                offset = offsets * effect_side
-                new_tiles = np.column_stack([
-                    np.full(strength, rank, np.int32),
-                    np.full(strength, file, np.int32)
-                ]) + np.column_stack([
-                    np.arange(1, strength + 1) * offset[0],
-                    np.arange(1, strength + 1) * offset[1]
-                ])
-                new_tiles = new_tiles[::-1]
-
-                strength_index = 0
-                while strength_index < strength:
-                    if (np.all(board_manager.board_state[new_tiles[strength_index:, 0], new_tiles[strength_index:, 1]] == Piece.EMPTY) and 
-                        np.all(np.logical_and(0 <= new_tiles[strength_index:], new_tiles[strength_index:] < 8))
-                    ):
-                        break
-                    strength_index += 1
-                if strength_index < strength:
-                    new_tile = new_tiles[strength_index]
-                else:
-                    new_tile = np.array([rank, file])
-                
-                board_manager.spell_move(np.array([rank, file]), new_tile)
-
-            # move random
-            elif effect_id[1] in ['random']:
-                # move random or anywhere
-                # anywhere is not supported right now since that needs additional input
-                offsets = np.random.shuffle(offsets)
-                for offset in offsets:
-                    new_tile = np.array([rank, file]) + offset
-                    if (board_manager.board_state[new_tile[0], new_tile[1]] == Piece.EMPTY and
-                        np.all(np.logical_and(0 <= new_tile, new_tile < 8))
-                    ):
-                        break
-                
-                board_manager.spell_move(np.array([rank, file]), new_tile)
-
-        # remove spells
-        elif effect_id[0] == 'remove':
-            board_manager.remove_tile(rank, file)
+        blocked = False
+        for moveable_effect in self.moveable_effects[rank][file]:
+            if moveable_effect.name == 'shield':
+                moveable_effect.duration = 0
+                blocked = True
         
-        # repair spells
-        elif effect_id[0] == 'repair':
-            board_manager.repair_tile(rank, file)
-        
-        # shield spells
-        elif effect_id[0] == 'shield':
-            self.moveable_effects[rank][file].append(Effect({
-                'name': effect_id[0],
-            }))
-        
+        if effect_id[0] == 'break':
+            blocked = False
+            self.moveable_effects[rank][file] = [
+                moveable_effect for moveable_effect in self.moveable_effects[rank][file]
+                if moveable_effect.name != 'shield'
+            ]
+
+        if not blocked:
+            # movement spells
+            if effect_id[0] == 'move':
+                # print(MOVE_SPELL_OFFSETS)
+                offsets = MOVE_SPELL_OFFSETS[effect_id[1]]
+                # move forward or back
+                if effect_id[1] in ['forward', 'back']:
+                    offset = offsets * effect_side
+                    new_tiles = np.column_stack([
+                        np.full(strength, rank, np.int32),
+                        np.full(strength, file, np.int32)
+                    ]) + np.column_stack([
+                        np.arange(1, strength + 1),
+                        np.arange(1, strength + 1)
+                    ]) * offset[::-1]
+                    new_tiles = new_tiles[::-1]
+
+                    strength_index = 0
+                    while strength_index < strength:
+                        if (np.all(board_manager.board_state[new_tiles[strength_index:, 0], new_tiles[strength_index:, 1]] == Piece.EMPTY) and 
+                            np.all(np.logical_and(0 <= new_tiles[strength_index:], new_tiles[strength_index:] < 8))
+                        ):
+                            break
+                        strength_index += 1
+                    if strength_index < strength:
+                        new_tile = new_tiles[strength_index]
+                    else:
+                        new_tile = np.array([rank, file])
+                    
+                    board_manager.spell_move(self, np.array([rank, file]), new_tile)
+
+                # move random
+                elif effect_id[1] in ['random']:
+                    # move random or anywhere
+                    # anywhere is not supported right now since that needs additional input
+                    offsets = np.random.permutation(offsets)
+                    for offset in offsets:
+                        new_tile = np.array([rank, file]) + offset
+                        if (board_manager.board_state[new_tile[0], new_tile[1]] == Piece.EMPTY and
+                            np.all(np.logical_and(0 <= new_tile, new_tile < 8))
+                        ):
+                            break
+                    
+                    board_manager.spell_move(self, np.array([rank, file]), new_tile)
+
+            # remove spells
+            elif effect_id[0] == 'remove':
+                board_manager.remove_tile(rank, file)
+            
+            # repair spells
+            elif effect_id[0] == 'repair':
+                board_manager.repair_tile(rank, file)
+            
+            # shield spells
+            elif effect_id[0] == 'shield':
+                self.moveable_effects[rank][file].append(Effect({
+                    'name': effect_id[0],
+                }))
+            
         # update hands and queued effects
         if board_manager.side > 0:
             # black then white
@@ -750,75 +810,78 @@ Queued Slow Spells: {self.queued_slow_effects}"""
         effect_id = slow_effect['effect_id'].split('@')
         rank, file = slow_effect['target']
 
-        # there is no core/suffix encoding with slow spells (since they have such varied effects)
-        if effect_id[0] in ['cannot_move', 'control']:
-            """
-                Name: cannot_move
-                Description: pieces cannot be moved by the player
-                Duration: 1-3, inf
-            """
+        hands_manager.last_card = slow_effect['card_id']
 
-            """
-                Name: control
-                Description: pieces cannot be moved by the player but 
-                can be moved by the opponent
-                Duration: 1-3
-            """
+        blocked = False
+        for moveable_effect in self.moveable_effects[rank][file]:
+            if moveable_effect.name == 'shield':
+                moveable_effect.duration = 0
+                blocked = True
 
-            self.moveable_effects[rank][file].append(
-                Effect({
-                    'name': effect_id[0],
-                    'duration': int(effect_id[1])
-                })
-            )
+        if not blocked:
+            # there is no core/suffix encoding with slow spells (since they have such varied effects)
+            if effect_id[0] in ['cannot_move', 'control']:
+                """
+                    Name: cannot_move
+                    Description: pieces cannot be moved by the player
+                    Duration: 1-3, inf
+                """
 
-        elif effect_id[0] in ['shrink', 'grow']:
-            """
-                Name: shrink
-                Description: piece cannot capture
-                Duration: 3
-            """
+                """
+                    Name: control
+                    Description: pieces cannot be moved by the player but 
+                    can be moved by the opponent
+                    Duration: 1-3
+                """
 
-            """
-                Name: grow
-                Description: piece will randomly capture an adjacent piece (if applicable)
-                Duration: 3
-            """
+                self.moveable_effects[rank][file].append(
+                    Effect({
+                        'name': effect_id[0],
+                        'duration': int(effect_id[1])
+                    })
+                )
 
-            self.moveable_effects[rank][file].append(
-                Effect({
-                    'name': effect_id[0]
-                })
-            )
-        
-        elif effect_id[0] in ['area_attack', 'death']:
-            """
-                Name: area_attack
-                Description: at the end of the turn, a random piece within 
-                a range of the target will be randomly captured
-                Duration: end of turn
-            """
+            elif effect_id[0] in ['shrink', 'grow']:
+                """
+                    Name: shrink
+                    Description: piece cannot capture
+                    Duration: 3
+                """
 
-            """
-                Name: death
-                Description: at the end of the turn, the piece
-                in the target tile will be captured
-                Duration: end of turn
-            """
+                """
+                    Name: grow
+                    Description: piece will randomly capture an adjacent piece (if applicable)
+                    Duration: 3
+                """
 
-            self.static_effects[rank][file].append(
-                Effect({
-                    'name': '@'.join(effect_id),
-                    'duration': 1
-                })
-            )
-        
-        elif effect_id[0] == 'break':
-            """
-                Effect Undecided
-            """
-            ...
-        
+                self.moveable_effects[rank][file].append(
+                    Effect({
+                        'name': effect_id[0]
+                    })
+                )
+            
+            elif effect_id[0] in ['area_attack', 'death']:
+                """
+                    Name: area_attack
+                    Description: at the end of the turn, a random piece within 
+                    a range of the target will be randomly captured
+                    Duration: end of turn
+                """
+
+                """
+                    Name: death
+                    Description: at the end of the turn, the piece
+                    in the target tile will be captured
+                    Duration: end of turn
+                """
+
+                self.static_effects[rank][file].append(
+                    Effect({
+                        'name': '@'.join(effect_id),
+                        'duration': 1
+                    })
+                )
+            
         # update hands and queued effects
         if board_manager.side > 0:
             # black then white
@@ -863,15 +926,16 @@ Queued Slow Spells: {self.queued_slow_effects}"""
                             ):
                                 possible_targets = np.array([*possible_targets, tile])
                         
-                        target = np.random.choice(possible_targets)
+                        target = possible_targets[np.random.randint(0, possible_targets.shape[0])]
                         captures[target[0], target[1]] = True
                     static_effect.duration -= 1
         
                 for moveable_effect in moveable_effects:
                     if moveable_effect.name == 'shield':
-                        captures[rank, file] = True
+                        captures[rank,file] = False
                         moveable_effect.duration = 0
-                    moveable_effect.duration -= 1
+                    if moveable_effect.duration >= 0:
+                        moveable_effect.duration -= 1
 
         board_manager.board_state[captures] = Piece.EMPTY
 
@@ -902,6 +966,7 @@ Queued Slow Spells: {self.queued_slow_effects}"""
         }
 
     def end_turn(self):
+        self._check_counterspells()
         self._check_durations()
         self._clear_queue()
 
@@ -916,9 +981,16 @@ CUMUL_RATES_BY_LEVEL = np.array([
 
 
 class HandsManager:
-    def __init__(self):
+    def __init__(
+        self,
+        hands: dict = {
+            1: ['avada_kedavra'],
+            -1: ['cruciatus', 'imperius'],
+        }
+    ):
         self._load_data()
-        self._clear_hands()
+        self._setup_variables()
+        self._setup_hands(hands=hands)
         self._clear_queues()
         self._clear_coins()
     
@@ -936,9 +1008,18 @@ Black Queue: {self.black_queue}"""
         with open('./assets/cards/effect_data.json', 'r') as f:
             self.effect_data = json.load(f)
 
-    def _clear_hands(self):
-        self.white_hand = np.array(['avada_kedavra']) # card id
-        self.black_hand = np.array(['cruciatus', 'imperius'])
+    def _setup_variables(self):
+        self.last_card = None
+
+    def _setup_hands(
+        self, 
+        hands: dict = {
+            1: ['avada_kedavra'],
+            -1: ['cruciatus', 'imperius'],
+        }
+    ):
+        self.white_hand = np.array(hands[1]) # card id
+        self.black_hand = np.array(hands[-1])
     
     def _clear_queues(self):
         self.white_queue = np.full((self.white_hand.size, 2), -1, np.int32)
@@ -948,7 +1029,7 @@ Black Queue: {self.black_queue}"""
         self.white_coins = []
         self.black_coins = []
 
-    ### external use ###
+    ### external helpers ###
     def summon_card(self, side: int, chain_length: int):
         # get rarity
         new_rates = BASE_RATES_BY_LEVEL + CUMUL_RATES_BY_LEVEL * chain_length
@@ -986,17 +1067,63 @@ Black Queue: {self.black_queue}"""
         self._clear_queues()
         self._clear_coins()
 
-    ### user request ###
-    def queue_card(self, side: int, card_index: int, rank: int, file: int, effects_manager: EffectsManager):
+    ### api ###
+    def queue_card(self, side: int, card_index: int, rank: int, file: int, board_manager: BoardManager, effects_manager: EffectsManager, **kwargs):
+        side_effects = [side_effect.name for side_effect in effects_manager.side_effects[side]]
+        if 'backfire' in side_effects:
+            for side_effect in effects_manager.side_effects[side]:
+                if side_effect.name == 'backfire':
+                    side_effect.duration = 0
+            if side > 0:
+                return self.white_queue
+            else:
+                return self.black_queue
+        
         if side > 0:
             card_id = self.white_hand[card_index]
             if self.card_data[card_id]['speed'] == 0:
-                effects_manager.inflict_side_effect(
-                    side, 
-                    rank, 
-                    file,
-                    self.card_data[card_id]['effect_id']
-                )
+                effect_id = self.card_data[card_id]['effect_id']
+                if effect_id in ['echo']:
+                    if self.last_card is None:
+                        return self.white_queue
+                    self.white_hand = np.array([
+                        *self.white_hand,
+                        self.last_card
+                    ])
+                    self.white_queue = np.array([
+                        *self.white_queue,
+                        [-1,-1]
+                    ])
+                elif effect_id in ['move_anywhere']:
+                    moveable_effects = [
+                        moveable_effect.name for moveable_effect in
+                        effects_manager.moveable_effects[rank][file]
+                    ]
+                    new_rank,new_file = kwargs['new_rank'], kwargs['new_file']
+                    if ( # this piece can move
+                        (
+                            (side * board_manager.board_state[rank,file] > 0 and 'control' not in moveable_effects) or
+                            (side * board_manager.board_state[rank,file] < 0 and 'control' in moveable_effects)
+                        ) and
+                        ( # the target square can be moved to
+                            board_manager.board_state[new_rank,new_file] == Piece.EMPTY and
+                            not board_manager.removed_tiles[new_rank,new_file]
+                        )
+                    ):
+                        board_manager.spell_move(
+                            effects_manager,
+                            np.array([rank,file]),
+                            np.array([new_rank,new_file]),
+                        )
+                    else:
+                        return self.white_queue
+                else:
+                    effects_manager.inflict_side_effect(
+                        side, 
+                        rank, 
+                        file,
+                        effect_id
+                    )
                 mask = np.full(self.white_hand.size, True)
                 mask[card_index] = False
                 self.white_hand = self.white_hand[mask]
@@ -1008,12 +1135,24 @@ Black Queue: {self.black_queue}"""
         else:
             card_id = self.black_hand[card_index]
             if self.card_data[card_id]['speed'] == 0:
-                effects_manager.inflict_side_effect(
-                    side, 
-                    rank, 
-                    file,
-                    self.card_data[card_id]['effect_id']
-                )
+                if self.card_data[card_id]['effect_id'] in ['echo']:
+                    if self.last_card is None:
+                        return self.black_queue
+                    self.black_hand = np.array([
+                        *self.black_hand,
+                        self.last_card
+                    ])
+                    self.black_queue = np.array([
+                        *self.black_queue,
+                        [-1,-1]
+                    ])
+                else:
+                    effects_manager.inflict_side_effect(
+                        side, 
+                        rank, 
+                        file,
+                        self.card_data[card_id]['effect_id']
+                    )
                 mask = np.full(self.black_hand.size, True)
                 mask[card_index] = False
                 self.black_hand = self.black_hand[mask]
@@ -1083,6 +1222,7 @@ Black Queue: {self.black_queue}"""
             self.black_coins = [*fast, *slow]
 
         self._clear_queues()
+
 
 class GameState:
     def __init__(self):
@@ -1225,7 +1365,12 @@ class GameState:
             self.hands_manager.lock_in_cards(side, self.effects_manager)
             self.phase += 1
         elif req['endpoint'] == 'queue_card':
-            card_queue = self.hands_manager.queue_card(side, **params)
+            card_queue = self.hands_manager.queue_card(
+                side, 
+                **params, 
+                board_manager=self.board_manager, 
+                effects_manager=self.effects_manager
+            )
             side_effects = self.effects_manager.get_side_effects_json()
             hands = {
                 1: self.hands_manager.white_hand.tolist(),

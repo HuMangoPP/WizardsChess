@@ -1829,7 +1829,7 @@
             25,
             40
         ],
-        "description": "Enlarge a piece. Enlarged pieces can capture an adjacent square. Counter spell for reducio.",
+        "description": "Enlarge a piece. Enlarged pieces cannot be captured. Counter spell for reducio.",
         "path": [
             [
                 -0.2075,
@@ -2181,7 +2181,7 @@
             25,
             25
         ],
-        "description": "General counter spell. Remove any spell effect on a piece.",
+        "description": "General counter spell. Remove all spell effect on a piece.",
         "path": [
             [
                 -0.29,
@@ -3141,7 +3141,7 @@
     },
     "apparition": {
         "display_name": "Apparition",
-        "speed": 1,
+        "speed": 0,
         "colour": [
             25,
             25,
@@ -5881,7 +5881,7 @@
     },
     "stupefy": {
         "display_name": "Stupefy",
-        "speed": 2,
+        "speed": 1,
         "colour": [
             50,
             25,
