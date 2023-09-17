@@ -13,18 +13,40 @@ class _Settings:
     COIN_SLEEVE = pg.image.load('./assets/cards/coin_sleeve.png')
     COIN_RECT = COIN_BORDER.get_rect()
 
-    def pg_convert():
+    def pg_setup():
         _Settings.CARD_BORDER.convert()
         _Settings.CARD_SLEEVE.convert()
         _Settings.COIN_BORDER.convert()
         _Settings.COIN_SLEEVE.convert()
+
+        _Settings.CARD_BORDER = pg.transform.scale(
+            _Settings.CARD_BORDER, 
+            np.array(_Settings.CARD_BORDER.get_size()) * 2
+        )
+        _Settings.CARD_SLEEVE = pg.transform.scale(
+            _Settings.CARD_SLEEVE, 
+            np.array(_Settings.CARD_SLEEVE.get_size()) * 2
+        )
+        _Settings.COIN_BORDER = pg.transform.scale(
+            _Settings.COIN_BORDER, 
+            np.array(_Settings.COIN_BORDER.get_size()) * 2
+        )
+        _Settings.COIN_SLEEVE = pg.transform.scale(
+            _Settings.COIN_SLEEVE, 
+            np.array(_Settings.COIN_SLEEVE.get_size()) * 2
+        )
+        
+        _Settings.CARD_RECT = _Settings.CARD_BORDER.get_rect()
+        _Settings.COIN_RECT = _Settings.COIN_BORDER.get_rect()
+
         _Settings.COIN_BORDER.set_colorkey((0,255,0))
         _Settings.COIN_SLEEVE.set_colorkey((0,255,0))
+
 
 class CardsRenderer:
     def __init__(self, menu):
         self.menu = menu
-        _Settings.pg_convert()
+        _Settings.pg_setup()
         self._create_cards()
 
         self._init_hand_variables()
@@ -75,7 +97,7 @@ class CardsRenderer:
                 data['colour'],
                 4,
                 style='center',
-                box_width=_Settings.CARD_RECT.width * 4 / 5
+                box_width=_Settings.CARD_RECT.width * 3 / 4
             )
 
             back = _Settings.CARD_SLEEVE.copy()
