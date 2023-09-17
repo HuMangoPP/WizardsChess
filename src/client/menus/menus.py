@@ -659,29 +659,13 @@ class GameMenu(Menu):
 
         self.board_renderer.render(self.client.displays[DEFAULT_DISPLAY])
 
-        self.cards_renderer.render(self.client.displays[DEFAULT_DISPLAY])
+        if self.cards_renderer.render(
+            self.client.displays[DEFAULT_DISPLAY], 
+            self.client.displays[EFFECTS_DISPLAY]
+        ):
+            displays_to_render.insert(1, EFFECTS_DISPLAY)
 
         if self.winner is None:
-            self.client.font.render(
-                self.client.displays[DEFAULT_DISPLAY], 
-                'Your move' if self.my_turn else 'Opponents move', 
-                self.client.screen_size[0] / 2, 
-                self.client.screen_size[1] / 5, 
-                (255, 255, 255), 
-                30, 
-                style='center', 
-                box_width=self.client.screen_size[0] - 100
-            )
-            self.client.font.render(
-                self.client.displays[DEFAULT_DISPLAY], 
-                self.phase_msgs[self.phase], 
-                self.client.screen_size[0] / 2, 
-                self.client.screen_size[1] / 4, 
-                (255, 255, 255), 
-                30, 
-                style='center', 
-                box_width=self.client.screen_size[0] - 100
-            )
             self.turn_indicator.render(self.client.displays[DEFAULT_DISPLAY])
         else:
             if self.winner == 1:
@@ -719,7 +703,6 @@ class GameMenu(Menu):
                 )
 
         super().render_overlay()
-        
-        displays_to_render.insert(1, EFFECTS_DISPLAY)
+
         return displays_to_render
   

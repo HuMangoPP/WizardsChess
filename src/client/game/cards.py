@@ -225,13 +225,15 @@ class CardsRenderer:
             else:
                 display.blit(coin_surfs[1], coin_rect)
 
-    def render(self, display: pg.Surface):
-        self._render_my_hand(display)
-        self._render_opponent_hand(display)
-        self._render_my_coins(display)
-        self._render_opponent_coins(display)
+    def render(self, default_display: pg.Surface, effects_display: pg.Surface):
+        self._render_my_hand(default_display)
+        self._render_opponent_hand(default_display)
+        self._render_my_coins(default_display)
+        self._render_opponent_coins(default_display)
         if self.bolt is not None:
-            self.bolt.render(display)
+            self.bolt.render(effects_display)
+            return True
+        return False
 
     def animate_reveal_coins(self):
         if np.all(self.revealed_coins):
