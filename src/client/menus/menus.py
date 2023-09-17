@@ -373,6 +373,7 @@ class GameMenu(Menu):
         self.current_animation = None
         self.animation_timer = 0
         self.animation_wait = 1
+        self.temp_card_input = np.full(2,-1)
 
         # render
         self.theme = 'gryffindor_red'
@@ -490,22 +491,42 @@ class GameMenu(Menu):
                             file, rank = (np.array(event.pos) - self.board_renderer.board_rect.topleft) // tilesize
                             
                             if self.cards_renderer.pickup_card != -1:
-                                req = {
-                                    'method': 'post',
-                                    'endpoint': 'queue_card',
-                                    'params': {
-                                        'card_index': self.cards_renderer.pickup_card,
-                                        'rank': int(rank),
-                                        'file': int(file),
+                                if self.my_hand[self.cards_renderer.pickup_card] in ['apparition']:
+                                    if self.temp_card_input[0] != -1:
+                                        req = {
+                                            'method': 'post',
+                                            'endpoint': 'queue_card',
+                                            'params': {
+                                                'card_index': self.cards_renderer.pickup_card,
+                                                'rank': int(self.temp_card_input[0]),
+                                                'file': int(self.temp_card_input[1]),
+                                                'new_rank': int(rank),
+                                                'new_file': int(file),
+                                            }
+                                        }
+                                        self.temp_card_input = np.full(2,-1)
+                                    else:
+                                        self.temp_card_input = np.array([rank,file])
+                                        req = {}
+                                else:
+                                    req = {
+                                        'method': 'post',
+                                        'endpoint': 'queue_card',
+                                        'params': {
+                                            'card_index': self.cards_renderer.pickup_card,
+                                            'rank': int(rank),
+                                            'file': int(file),
+                                        }
                                     }
-                                }
-                                res = self.client.send_req(req)
-                                self.card_queue = np.array(res['card_queue']).reshape(-1,2)
-                                self.my_hand = np.array(res['my_hand'])
-                                self.cards_renderer.pickup_card = -1
+                                
+                                if req:
+                                    res = self.client.send_req(req)
+                                    self.card_queue = np.array(res['card_queue']).reshape(-1,2)
+                                    self.my_hand = np.array(res['my_hand'])
+                                    self.cards_renderer.pickup_card = -1
 
-                                self.my_side_effects = res['my_side_effects']
-                                self.opponent_side_effects = res['opponent_side_effects']
+                                    self.my_side_effects = res['my_side_effects']
+                                    self.opponent_side_effects = res['opponent_side_effects']
 
                             elif self.moveable_pieces[rank,file] and self.board_renderer.holding[0] == -1:
                                 self.board_renderer.holding = [rank, file]
@@ -535,11 +556,13 @@ class GameMenu(Menu):
                                 self.possible_moves = np.full((8,8), False)
                             
                             else:
+                                self.temp_card_input = np.full(2,-1)
                                 self.board_renderer.holding = [-1,-1]
                                 self.possible_moves = np.full((8,8), False)
                         
                         else:
                             self.board_renderer.holding = [-1,-1]
+                            self.temp_card_input = np.full(2,-1)
                             self.possible_moves = np.full((8,8), False)
                             self.cards_renderer.pickup_card = -1
                         
