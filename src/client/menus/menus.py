@@ -489,8 +489,8 @@ class GameMenu(Menu):
                             if self.moveable_pieces[rank,file]:
                                 self.board_renderer.hovering = [rank, file]
                             else:
-                                static_effects = [static_effect.name for static_effect in self.static_effects[rank][file]]
-                                moveable_effects = [moveable_effect.name for moveable_effect in self.moveable_effects[rank][file]]
+                                static_effects = [static_effect['name'] for static_effect in self.static_effects[rank][file]]
+                                moveable_effects = [moveable_effect['name'] for moveable_effect in self.moveable_effects[rank][file]]
                                 self.tooltip_indicator.setup_tooltip(
                                     text=f"moveable effects - {', '.join(moveable_effects)}. static effects - {', '.join(static_effects)}"
                                 )
