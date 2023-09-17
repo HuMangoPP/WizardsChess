@@ -328,6 +328,7 @@ class WaitingRoom(Menu):
 
 from ..game.chess import BoardRenderer
 from ..game.cards import CardsRenderer
+from ..game.hud import TurnIndicator
 
 
 class GameMenu(Menu):
@@ -339,6 +340,7 @@ class GameMenu(Menu):
 
         self.board_renderer = BoardRenderer(self)
         self.cards_renderer = CardsRenderer(self)
+        self.turn_indicator = TurnIndicator(self)
 
         # # import game
         # self.width, self.height = client.res
@@ -368,7 +370,7 @@ class GameMenu(Menu):
     def _setup_variables(self):
         # variables
         self.my_turn = False
-        self.phase = 0
+        self.phase = -1
         self.winner = None
         self.current_animation = None
         self.animation_timer = 0
@@ -456,6 +458,7 @@ class GameMenu(Menu):
                     # new phase/turn
                     self.my_turn = res['my_turn']
                     self.phase = res['phase']
+                    self.turn_indicator.update()
 
                     self._get_board_state()
                     self._get_hands()
@@ -679,6 +682,7 @@ class GameMenu(Menu):
                 style='center', 
                 box_width=self.client.screen_size[0] - 100
             )
+            self.turn_indicator.render(self.client.displays[DEFAULT_DISPLAY])
         else:
             if self.winner == 1:
                 self.client.font.render(
