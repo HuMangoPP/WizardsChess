@@ -188,7 +188,7 @@ class CardsRenderer:
         for i, coin_data in enumerate(self.menu.my_coins):
             x = i - center_offset
             x = x * _Settings.COIN_RECT.width
-            y = self.menu.client.screen_size[1] - _Settings.COIN_RECT.height - 2 * _Settings.CARD_RECT.height
+            y = self.menu.client.screen_size[1] - _Settings.COIN_RECT.height - _Settings.CARD_RECT.height
 
             coin_surfs = self.coins[coin_data['card_id']]
             coin_rect = coin_surfs[0].get_rect()
@@ -212,7 +212,7 @@ class CardsRenderer:
         for i, coin_data in enumerate(self.menu.opponent_coins):
             x = i - center_offset
             x = x * _Settings.COIN_RECT.width
-            y = _Settings.COIN_RECT.height + 2 * _Settings.CARD_RECT.height
+            y = _Settings.COIN_RECT.height +  _Settings.CARD_RECT.height
 
             coin_surfs = self.coins[coin_data['card_id']]
             coin_rect = coin_surfs[0].get_rect()
