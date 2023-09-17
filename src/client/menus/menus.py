@@ -328,7 +328,7 @@ class WaitingRoom(Menu):
 
 from ..game.chess import BoardRenderer
 from ..game.cards import CardsRenderer
-from ..game.hud import TurnIndicator
+from ..game.hud import TurnIndicator, TooltipIndicator
 
 
 class GameMenu(Menu):
@@ -385,6 +385,9 @@ class GameMenu(Menu):
             'Reaction Phase',
             'Resolve Phase',
         ]
+
+        # ui
+        self.tooltip_indicator = TooltipIndicator(self)
 
     def _get_board_state(self, use_dummy: bool = False):
         req = {
@@ -485,8 +488,28 @@ class GameMenu(Menu):
                             file, rank = (np.array(event.pos) - self.board_renderer.board_rect.topleft) // tilesize
                             if self.moveable_pieces[rank,file]:
                                 self.board_renderer.hovering = [rank, file]
+                            else:
+                                static_effects = [static_effect.name for static_effect in self.static_effects[rank][file]]
+                                moveable_effects = [moveable_effect.name for moveable_effect in self.moveable_effects[rank][file]]
+                                self.tooltip_indicator.setup_tooltip(
+                                    text=f"moveable effects - {', '.join(moveable_effects)}. static effects - {', '.join(static_effects)}"
+                                )
                         else:
                             self.board_renderer.hovering = [-1,-1]
+                            self.tooltip_indicator.setup_tooltip()
+                        
+                        if self.turn_indicator.piece_icon_rect.collidepoint(event.pos):
+                            if self.turn_indicator.movement_index == self.client.net.side:
+                                self.tooltip_indicator.setup_tooltip(text='your turn')
+                            else:
+                                self.tooltip_indicator.setup_tooltip(text='opponent turn')
+                        elif self.turn_indicator.spell_icon_rect.collidepoint(event.pos):
+                            if self.turn_indicator.movement_index == self.client.net.side:
+                                self.tooltip_indicator.setup_tooltip(text='wand ready')
+                            else:
+                                self.tooltip_indicator.setup_tooltip(text='opponent casting')
+                        else:
+                            self.tooltip_indicator.setup_tooltip()  
                     
                     if event.type == pg.MOUSEBUTTONUP:
                         if self.board_renderer.board_rect.collidepoint(event.pos):
@@ -667,6 +690,7 @@ class GameMenu(Menu):
 
         if self.winner is None:
             self.turn_indicator.render(self.client.displays[DEFAULT_DISPLAY])
+            self.tooltip_indicator.render(self.client.displays[DEFAULT_DISPLAY])
         else:
             if self.winner == 1:
                 self.client.font.render(

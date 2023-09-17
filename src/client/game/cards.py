@@ -97,7 +97,7 @@ class CardsRenderer:
                 data['colour'],
                 4,
                 style='center',
-                box_width=_Settings.CARD_RECT.width * 3 / 4
+                box_width=_Settings.CARD_RECT.width * 3 / 5
             )
 
             back = _Settings.CARD_SLEEVE.copy()
