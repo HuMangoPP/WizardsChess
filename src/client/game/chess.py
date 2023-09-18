@@ -95,7 +95,13 @@ class BoardRenderer:
 
     def _render_pieces(self, display: pg.Surface):
         fixed = self.menu.board_state == self.menu.dummy_board_state
-        for rank, state_row in enumerate(self.menu.board_state):
+        for rank, state_row in enumerate(self.menu.board_state[::self.menu.client.net.side]):
+            if self.menu.client.net.side > 0:
+                rank = rank
+                render_rank = rank
+            else:
+                rank = 7 - rank
+                render_rank = 7 - rank
             for file, tile in enumerate(state_row):
                 if np.all(np.array([rank,file]) == self.movement[1]):
                     continue
@@ -103,7 +109,7 @@ class BoardRenderer:
                 if fixed[rank,file]:
                     self.piece_rects[rank][file].topleft = [
                         file * _Settings.TILESIZE,
-                        (rank - 1) * _Settings.TILESIZE
+                        (render_rank - 1) * _Settings.TILESIZE
                     ]
                 
                 if tile == _Settings.EMPTY:
@@ -112,7 +118,7 @@ class BoardRenderer:
                 if self.holding[0] == rank and self.holding[1] == file:
                     self.piece_rects[rank][file].center = pg.mouse.get_pos() - np.array(self.board_rect.topleft)
                 elif (self.hovering[0] == rank and self.hovering[1] == file and self.holding[0] == -1):
-                    self.piece_rects[rank][file].top = (rank - 2) * _Settings.TILESIZE
+                    self.piece_rects[rank][file].top = (render_rank - 2) * _Settings.TILESIZE
                 
                 self.piece_rects[rank][file].topleft = self.piece_rects[rank][file].topleft + np.array(self.board_rect.topleft)
 
@@ -124,11 +130,15 @@ class BoardRenderer:
 
     def _render_possible_moves(self, display: pg.Surface):
         for rank, row in enumerate(self.menu.possible_moves):
+            if self.menu.client.net.side > 0:
+                render_rank = rank
+            else:
+                render_rank = 7 - rank
             for file, tile in enumerate(row):
                 if tile:
                     drawpos = (
                         np.array(self.board_rect.center) + 
-                        (np.array([file, rank]) - 7 / 2) * _Settings.TILESIZE
+                        (np.array([file, render_rank]) - 7 / 2) * _Settings.TILESIZE
                     )
                     pg.draw.circle(
                         display, 
@@ -158,11 +168,11 @@ class BoardRenderer:
             if self.menu.dummy_board_state[tuple(different[0])] == _Settings.EMPTY:
                 # moved from 0
                 self.movement = different.copy()
-                self.slide_vel = np.diff(self.movement, axis=0) * _Settings.TILESIZE / t
+                self.slide_vel = np.diff(self.movement, axis=0) * _Settings.TILESIZE / t * np.array([self.menu.client.net.side, 1])
             else:
                 # moved from 1
                 self.movement = different[::-1]
-                self.slide_vel = np.diff(self.movement, axis=0) * _Settings.TILESIZE / t
+                self.slide_vel = np.diff(self.movement, axis=0) * _Settings.TILESIZE / t * np.array([self.menu.client.net.side, 1])
             self.slide_vel = self.slide_vel[0,::-1]
 
     def animate_board_move(self, dt: float):
@@ -170,9 +180,13 @@ class BoardRenderer:
             rank,file = self.movement[0]
             xy = self.piece_rects[rank][file].topleft - np.array(self.board_rect.topleft) + self.slide_vel * dt
 
+            if self.menu.client.net.side > 0:
+                move_bounds = (self.movement[:,::-1] - np.array([0, 1])) * _Settings.TILESIZE 
+            else:
+                move_bounds = (np.array([0, 7]) - self.movement[:,::-1] - np.array([0, 1])) * _Settings.TILESIZE 
             if not np.all(np.logical_and(
-                    (np.min(self.movement[:,::-1], axis=0) - np.array([0,1])) * _Settings.TILESIZE <= xy,
-                    xy <= (np.max(self.movement[:,::-1], axis=0) - np.array([0,1]))  * _Settings.TILESIZE
+                    np.min(move_bounds) * _Settings.TILESIZE <= xy,
+                    xy <= np.max(move_bounds) * _Settings.TILESIZE
                 )
             ):
                 xy = (self.movement[1,::-1] - np.array([0,1])) * _Settings.TILESIZE

@@ -48,16 +48,16 @@ class TurnIndicator:
     def update(self):
         if self.menu.phase == 0:
             if self.menu.my_turn:
-                self.movement_index = self.menu.client.net.side
+                self.movement_index = 1
             else:
-                self.movement_index = -self.menu.client.net.side
+                self.movement_index = -1
         else:
             self.movement_index = 0
 
         if self.menu.my_turn:
-            self.spell_index = self.menu.client.net.side
+            self.spell_index = 1
         else:
-            self.spell_index = -self.menu.client.net.side
+            self.spell_index = -1
         
         if self.menu.phase == 2:
             self.spell_index = 0

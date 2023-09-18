@@ -486,6 +486,8 @@ class GameMenu(Menu):
                         ):
                             tilesize = self.board_renderer.board_rect.width // 8
                             file, rank = (np.array(event.pos) - self.board_renderer.board_rect.topleft) // tilesize
+                            if self.client.net.side < 0:
+                                rank = (7 - rank)
                             if self.moveable_pieces[rank,file]:
                                 self.board_renderer.hovering = [rank, file]
                             else:
@@ -499,12 +501,12 @@ class GameMenu(Menu):
                             self.tooltip_indicator.setup_tooltip()
                         
                         if self.turn_indicator.piece_icon_rect.collidepoint(event.pos):
-                            if self.turn_indicator.movement_index == self.client.net.side:
+                            if self.turn_indicator.movement_index > 0:
                                 self.tooltip_indicator.setup_tooltip(text='your turn')
                             else:
                                 self.tooltip_indicator.setup_tooltip(text='opponent turn')
                         elif self.turn_indicator.spell_icon_rect.collidepoint(event.pos):
-                            if self.turn_indicator.movement_index == self.client.net.side:
+                            if self.turn_indicator.spell_index > 0:
                                 self.tooltip_indicator.setup_tooltip(text='wand ready')
                             else:
                                 self.tooltip_indicator.setup_tooltip(text='opponent casting')
@@ -515,6 +517,8 @@ class GameMenu(Menu):
                         if self.board_renderer.board_rect.collidepoint(event.pos):
                             tilesize = self.board_renderer.board_rect.width // 8
                             file, rank = (np.array(event.pos) - self.board_renderer.board_rect.topleft) // tilesize
+                            if self.client.net.side < 0:
+                                rank = (7 - rank)
                             
                             if self.cards_renderer.pickup_card != -1:
                                 if self.my_hand[self.cards_renderer.pickup_card] in ['apparition']:
