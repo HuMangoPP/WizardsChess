@@ -1,6 +1,8 @@
 import pygame as pg
 import os, json
+import numpy as np
 
+"""
 def load_spritesheet(path: str, scale=1, colorkey=(0, 0, 0)) -> list[pg.Surface]:
     '''
         path is the path of a .png file of the following format: `{directory}/{spritesheet_name}-{rows}-{cols}.png`
@@ -29,6 +31,7 @@ def load_spritesheet(path: str, scale=1, colorkey=(0, 0, 0)) -> list[pg.Surface]
 
     return sprites
 
+    
 def load_animations(path: str, scale=1, colorkey=(0, 0, 0)) -> dict[str, list[pg.Surface]]:
     '''
         path is a directory which contains many spritesheets, each of which is a .png file of the following format: `{directory}/{spritesheet_name}-{rows}-{cols}.png`
@@ -46,6 +49,7 @@ def load_animations(path: str, scale=1, colorkey=(0, 0, 0)) -> dict[str, list[pg
     
     return animations
 
+    
 def load_sprites(path: str, scale=1, colorkey=(0, 0, 0)) -> dict[str, pg.Surface]:
     '''
         path is a directory containing different png files of the format: `{sprite_name}.png`
@@ -69,6 +73,7 @@ def load_sprites(path: str, scale=1, colorkey=(0, 0, 0)) -> dict[str, pg.Surface
     
     return sprites
 
+    
 def load_sprite_groups(path: str, scale=1, colorkey=(0, 0, 0)) -> dict[str, dict[str, pg.Surface]]:
     '''
         path is a directory containing directories `{dir_name}` which themselves contain .png files of the format: `{sprite_name}.png`
@@ -86,6 +91,28 @@ def load_sprite_groups(path: str, scale=1, colorkey=(0, 0, 0)) -> dict[str, dict
         sprite_groups[sprite_group] = load_sprites(os.path.join(path, sprite_group), scale, colorkey)
     
     return sprite_group
+
+"""
+
+
+def load_spritesheet(path: str, keys: list, scale: int = 1, colorkey: tuple = (0,0,0)) -> dict[any, pg.Surface]:
+    spritesheet = pg.image.load(path).convert()
+    spritesheet = pg.transform.scale(
+        spritesheet,
+        np.array(spritesheet.get_size()) * scale
+    )
+    sprite_width = spritesheet.get_width() // len(keys)
+    sprite_height = spritesheet.get_height()
+
+    sprites = {}
+    for i, key in enumerate(keys):
+        sprite = pg.Surface((sprite_width, sprite_height))
+        sprite.blit(spritesheet, (-i * sprite_width, 0))
+        sprite.set_colorkey(colorkey)
+        sprites[key] = sprite
+    
+    return sprites
+
 
 def load_json(path: str) -> dict:
     with open(path) as f:
