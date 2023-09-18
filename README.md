@@ -6,7 +6,7 @@ Chess, but sprinkle in some tcg elements. Use spells from the Harry Potter franc
 
 1. Download and unzip the repository
 
-2. Create a (venv)[https://docs.python.org/3/library/venv.html]
+2. Create a [venv](https://docs.python.org/3/library/venv.html)
 
 3. Run `pip install -r requirements.txt`
 
