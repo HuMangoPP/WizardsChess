@@ -349,7 +349,7 @@ class _Settings:
         
         return new_board_state, new_board_debuffs, new_castling_privileges
     
-    def calculate_n_steps_away(target_index: int, n_steps: int):
+    def calculate_n_steps_away(target_index: int, n_steps: int) -> set[int]:
         moves = set([target_index])
         if n_steps == 0:
             return moves
@@ -367,12 +367,11 @@ class _Settings:
         
         
 class TileDebuffs:
-    def __init__(self, tile_index: int):
-        self.tile_index = tile_index
+    def __init__(self):
         self.debuffs = []
     
     def copy(self):
-        new_debuffs = TileDebuffs(self.tile_index)
+        new_debuffs = TileDebuffs()
         new_debuffs.debuffs = self.debuffs.copy()
         return new_debuffs
 
@@ -388,22 +387,22 @@ class TileDebuffs:
     def tile_has_debuff(self, debuff: str):
         return debuff in self._get_tile_debuffs()
 
-    def resolve_debuffs(self, board_state: np.ndarray):
+    def resolve_debuffs(self, board_state: np.ndarray, tile_index: int):
         destroy_tiles = []
         for debuff in self.debuffs:
             if 'death' in debuff['debuff_name']:
-                destroy_tiles.append(self.tile_index)
+                destroy_tiles.append(tile_index)
             elif 'dangerous' in debuff['debuff_name']:
                 debuff_strength = int(debuff['debuff_name'][-1])
-                possible_tiles_to_destroy = _Settings.calculate_n_steps_away(self.tile_index, debuff_strength)
-                possible_tiles_to_destroy.remove(self.tile_index)
+                possible_tiles_to_destroy = _Settings.calculate_n_steps_away(tile_index, debuff_strength)
+                possible_tiles_to_destroy.remove(tile_index)
                 for possible_tile_to_destroy in possible_tiles_to_destroy:
                     if board_state[possible_tile_to_destroy] == 0:
                         possible_tiles_to_destroy.remove(possible_tile_to_destroy)
                 possible_tiles_to_destroy = list(possible_tiles_to_destroy)
                 if len(possible_tiles_to_destroy) > 0:
                     destroy_tiles.append(np.random.choice(possible_tiles_to_destroy))
-            
+        
         return destroy_tiles
 
     def clear_debuffs(self):
@@ -606,7 +605,7 @@ class BoardManager:
             target_index = played_card_params['target_index']
             debuffs = self.board_debuffs[target_index]
             new_debuffs = played_card_params['debuffs']
-            debuff_length = played_card_params['debfuf_length']
+            debuff_length = played_card_params['debuff_length']
 
             if 'displace' in new_debuffs:
                 self.board_state, self.board_debuffs, self.castling_privileges = _Settings.displace_spell_effect(
@@ -622,7 +621,10 @@ class BoardManager:
                 debuffs.update_debuffs(new_debuffs, debuff_length)
 
     def resolve_debuffs(self):
-        destroy_tiles = np.hstack([debuff.resolve_debuffs() for debuff in self.board_debuffs])
+        destroy_tiles = np.hstack([
+            debuff.resolve_debuffs(self.board_state, i) 
+            for i, debuff in enumerate(self.board_debuffs)
+        ]).astype(int)
         self.board_state[destroy_tiles] = 0
         [debuff.clear_debuffs() for debuff in self.board_debuffs]
 

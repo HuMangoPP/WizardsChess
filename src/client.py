@@ -68,8 +68,7 @@ class Client:
             self.font.render(
                 card,
                 row[1],
-                card_size[0] / 2,
-                card_size[1] / 2,
+                (card_size[0] / 2, card_size[1] / 2),
                 (255, 255, 255),
                 10, 
                 style='center'
