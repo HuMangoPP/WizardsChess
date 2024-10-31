@@ -1,192 +1,225 @@
-import pygame as pg
 import numpy as np
 import pandas as pd
-from .pyfont.font import Font
+import pygame as pg
+
+from .pymenus import *
 
 
 class _Settings:
+    RESOLUTION = (1280, 720)
+    MENU_MAP = dict(main=0, game=1)
+    WINDOW_NAME = 'Wizard Chess'
+
     TILESIZE = 64
-
-    COLOURS = {
-
-    }
+    COLOURS = dict()
 
 
 class Client:
-    def __init__(self):
+    def __init__(self, use_mgl: bool = True):
+        self.use_mgl = use_mgl
+        self._pg_init()
+        self.assets = self.Assets('./assets', self.resolution)
+        self._setup_menus()
+        self._setup_server()
+    
+    def _pg_init(self):
+        # init
         pg.init()
 
-        self.window = pg.display.set_mode((1920, 1080))
-        self.clock = pg.time.Clock()
-        pg.display.set_caption('Wizard Chess')
+        # get window and ctx
+        self.resolution = _Settings.RESOLUTION
+        if self.use_mgl:
+            import moderngl as mgl
+            from .pymgl import GraphicsEngine
+            pg.display.set_mode(self.resolution, pg.OPENGL | pg.DOUBLEBUF)
+            self.ctx = mgl.create_context()
+            self.ctx.enable(mgl.BLEND)
+            self.ctx.blend_func = (
+                mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA
+            )
 
+            # get graphics engine, font, and displays
+            self.graphics_engine = GraphicsEngine(self.ctx, self.resolution, './src')         
+        else:
+            self.window = pg.display.set_mode(self.resolution, pg.DOUBLEBUF)
+        
+        # font
+        from .pyfont import Font
         self.font = Font(pg.image.load('./src/pyfont/font.png').convert())
+        
+        # create displays
+        self.displays = dict(
+            default=pg.Surface(self.resolution),
+            overlay=pg.Surface(self.resolution)
+        )
+        if not self.use_mgl:
+            self.displays['overlay'].set_colorkey((0, 0, 0))
 
-        self._prerender_board()
-        self._load_pieces()
+        # window title
+        pg.display.set_caption(_Settings.WINDOW_NAME)
 
-        self._load_cards()
-        self.card_rects = {1: [], -1: []}
+        # clock
+        self.clock = pg.time.Clock()
+        self.dt = 0
+        
+        # events
+        self.events = []
     
-    def _prerender_board(self):
-        self.board = pg.Surface((8 * _Settings.TILESIZE, 8 * _Settings.TILESIZE))
-        center = np.array(self.board.get_size()) / 2
-        for i in np.arange(64):
-            xy = np.array([i % 8, i // 8])
-            colour = (181, 136, 99) if np.sum(xy) % 2 == 0 else (240, 217, 181)
-            xy = xy - 3.5
-            xy[1] *= -1
-            xy = xy * _Settings.TILESIZE
-            xy = center + xy
-            topleft = xy - _Settings.TILESIZE / 2
-            pg.draw.rect(self.board, colour, pg.Rect(
-                *topleft.astype(float),
-                _Settings.TILESIZE, _Settings.TILESIZE
-            ))
-        self.board_rect = self.board.get_rect()
-        self.board_rect.center = (np.array(self.window.get_size()) / 2).astype(float)
+    def _setup_menus(self):
+        # menus
+        self.menus : list[Menu] = [
+            MainMenu(self),
+            GameMenu(self)
+        ]
+        self.current_menu = 0
+    
+    def _setup_server(self):
+        from .server import Server
+        self.server = Server()
 
-    def _load_pieces(self):
-        pieces = pg.image.load('./assets/chess/pieces.png').convert()
-        piece_width = pieces.get_width() / 6
-        piece_height = pieces.get_height()
-        piece_names = ['king', 'queen', 'bishop', 'knight', 'rook', 'pawn']
-        scale = _Settings.TILESIZE / 16 * 3 / 4
-        self.pieces = {
-            piece_name: pg.transform.scale_by(pieces.subsurface(pg.Rect(i * piece_width, 0, piece_width, piece_height)), scale)
-            for i, piece_name in enumerate(piece_names)
-        }
-        [piece.set_colorkey((0, 0, 0)) for piece in self.pieces.values()]
+    def update(self):
+        # quit client
+        for event in self.events:
+            if event.type == pg.QUIT:
+                return dict(exit=True)
+            if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
+                return dict(exit=True)
+        
+        # not done loading assets
+        if not self.assets.finished_loading:
+            self.assets.load_assets(self)
+            self.menus[self.current_menu].transition_time = 0
+        
+        # menu update
+        return self.menus[self.current_menu].update(self)
 
-    def _load_cards(self):
-        card_data = pd.read_csv('./assets/cards/card_data.csv', index_col=0)
-        self.cards = {}
-        card_size = (200, 100)
-        for row in card_data.itertuples():
-            card = pg.Surface(card_size)
-            card.fill((100, 100, 100))
+    def render(self):
+        if self.use_mgl:
+            self.ctx.clear(0.08, 0.1, 0.2)
+        else:
+            self.window.fill((0, 0, 0))
+
+        # render to pg surface
+        [display.fill((0, 0, 0)) for display in self.displays.values()]
+        self.menus[self.current_menu].render(self)
+
+        # not done loading assets
+        if not self.assets.finished_loading:
+            font_size = 25
+            num_dots = (self.assets.progress // 5) % 3 + 1
             self.font.render(
-                card,
-                row[1],
-                (card_size[0] / 2, card_size[1] / 2),
+                self.displays['overlay'],
+                "loading",
+                np.array(self.resolution) / 2 + np.array([-font_size * 1.5, 0]),
                 (255, 255, 255),
-                10, 
+                font_size,
                 style='center'
             )
-            self.cards[row[0]] = card
-
-    def _render_piece_move_indices(self, piece_move_indices: np.ndarray):
-        center = np.array(self.window.get_size()) / 2
-        for piece_move_index in piece_move_indices:
-            xy = np.array([piece_move_index % 8, piece_move_index // 8])
-            xy = xy - 3.5
-            xy = xy * _Settings.TILESIZE
-            xy = center + xy
-
-            pg.draw.circle(self.window, (255, 255, 255), xy.astype(float), _Settings.TILESIZE // 6)
-
-    def _render_pieces(self, piece_keys: np.ndarray, piece_colours: np.ndarray):
-        center = np.array(self.window.get_size()) / 2
-
-        for i, (piece_key, piece_colour) in enumerate(zip(piece_keys, piece_colours)):
-            if piece_key == 'none':
-                continue
-
-            piece = self.pieces[piece_key].copy()
-            piece.set_colorkey((0, 255, 0))
-            coloured_piece = pg.Surface(piece.get_size())
-            coloured_piece.fill((100, 0, 0)) if piece_colour else coloured_piece.fill((0, 0, 100))
-            coloured_piece.blit(piece, (0, 0))
-            coloured_piece.set_colorkey((0, 0, 0))
-
-            xy = np.array([i % 8, i // 8])
-            xy = xy - 3.5
-            xy = xy * _Settings.TILESIZE
-            xy = center + xy
-            topleft = xy - np.array(coloured_piece.get_size()) * np.array([1/2, 4/5])
-            self.window.blit(coloured_piece, topleft.astype(float))
-
-    def _render_hands(
-        self, 
-        my_hand: np.ndarray, 
-        opponent_hand: np.ndarray, 
-        my_hand_played_indices: list, 
-        opponent_hand_played_indices: list
-    ):
-        render_offset = (1 - my_hand.size) / 2
-        self.card_rects = {1: [], -1: []}
-        for i, card_id in enumerate(my_hand):
-            card = self.cards[card_id]
-            card_rect = card.get_rect()
-            card_rect.centerx = self.window.get_width() / 2 + (render_offset + i) * (card_rect.width + 10)
-            card_rect.centery = self.window.get_height() - card_rect.height * (1 + (i in my_hand_played_indices))
-            self.card_rects[1].append(card_rect)
-
-            self.window.blit(card, card_rect)
+            self.font.render(
+                self.displays['overlay'],
+                "." * num_dots,
+                np.array(self.resolution) / 2 + np.array([font_size * 2, -self.font.char_height(font_size) / 2]),
+                (255, 255, 255),
+                font_size,
+                style='topleft'
+            )
         
-        render_offset = (1 - opponent_hand.size) / 2
-        for i, card_id in enumerate(opponent_hand):
-            card = self.cards[card_id]
-            card_rect = card.get_rect()
-            card_rect.centerx = self.window.get_width() / 2 + (render_offset + i) * (card_rect.width + 10)
-            card_rect.centery = card_rect.height * (1 + (i in opponent_hand_played_indices))
-            self.card_rects[-1].append(card_rect)
+        # render cursor
+        # self.displays['overlay'].blit(self.assets.cursor, pg.mouse.get_pos())
 
-            self.window.blit(card, card_rect)
+        if self.use_mgl:
+            # render using graphics engine to screen
+            [self.graphics_engine.render(
+                display, 
+                shader=shader
+            ) for shader, display in self.displays.items()]
+        else:
+            [self.window.blit(display, (0, 0)) for display in self.displays.values()]
 
-    def update(self, server):
-        dt = self.clock.tick(60) / 1000
-
-        for event in pg.event.get():
-            if event.type == pg.QUIT:
-                return False
+    def run(self):
+        # on load
+        self.menus[self.current_menu].on_load(self)
+        while True:
+            # update
+            self.dt = self.clock.get_time() / 1000
+            self.clock.tick()
+            self.events = pg.event.get()
+            exit_status = self.update()
+            if exit_status:
+                if exit_status['exit']:
+                    pg.quit()
+                    return
+                else: # menu transitions
+                    self.current_menu = _Settings.MENU_MAP[exit_status['goto']]
+                    self.menus[self.current_menu].on_load(self)
             
-            if event.type == pg.KEYDOWN:
-                if event.key == pg.K_ESCAPE:
-                    return False
-            
-                if event.key == pg.K_RETURN:
-                    server.end_turn()
-            
-            if event.type == pg.MOUSEBUTTONDOWN:
-                if self.board_rect.collidepoint(event.pos):
-                    xy = (np.array(event.pos) - np.array(self.board_rect.topleft)) // _Settings.TILESIZE
-                    board_index = xy[0] + xy[1] * 8
-                    server.board_event(board_index)
-                    server.hand_event({
-                        'side': 0,
-                        'board_index': board_index
-                    })
-                
-                for i, card_rect in enumerate(self.card_rects[1]):
-                    if card_rect.collidepoint(event.pos):
-                        server.hand_event({
-                            'side': 1,
-                            'card_index': i
-                        })
-                
-                for i, card_rect in enumerate(self.card_rects[-1]):
-                    if card_rect.collidepoint(event.pos):
-                        server.hand_event({
-                            'side': -1,
-                            'card_index': i
-                        })
+            # render
+            self.render()
+            pg.display.flip()
 
-        return True
-    
-    def render(self, server):
-        self.window.fill((0, 0, 0))
+    class Assets:
+        def __init__(self, path: str, resolution: tuple):
+            self.path = path
 
-        # render the board
-        self.window.blit(self.board, self.board_rect)
+            # progress
+            self.finished_loading = False
+            self.progress = 0
+        
+        def _load_pieces(self):
+            pieces = pg.image.load(f'{self.path}/chess/pieces.png').convert()
+            piece_width = pieces.get_width() / 6
+            piece_height = pieces.get_height()
+            piece_names = ['king', 'queen', 'bishop', 'knight', 'rook', 'pawn']
+            scale = _Settings.TILESIZE / 16 * 3 / 4
+            self.pieces = {
+                piece_name: pg.transform.scale_by(pieces.subsurface(pg.Rect(i * piece_width, 0, piece_width, piece_height)), scale)
+                for i, piece_name in enumerate(piece_names)
+            }
+            [piece.set_colorkey((0, 0, 0)) for piece in self.pieces.values()]
 
-        # render pieces
-        piece_keys, piece_colours, piece_move_indices = server.board_manager.get_render_data()
-        self._render_pieces(piece_keys, piece_colours)
-        self._render_piece_move_indices(piece_move_indices)
+        def _load_cards(self, client):
+            card_data = pd.read_csv(f'{self.path}/cards/card_data.csv', index_col=0)
+            self.cards = {}
+            card_size = (200, 100)
+            for row in card_data.itertuples():
+                card = pg.Surface(card_size)
+                card.fill((100, 100, 100))
+                client.font.render(
+                    card,
+                    row[1],
+                    (card_size[0] / 2, card_size[1] / 2),
+                    (255, 255, 255),
+                    10, 
+                    style='center'
+                )
+                self.cards[row[0]] = card
 
-        # render hand
-        hands, played_indices = server.hand_manager.get_render_data()
-        self._render_hands(hands[1], hands[-1], played_indices[1], played_indices[-1])
+        def _prerender_board(self, client):
+            self.board = pg.Surface((8 * _Settings.TILESIZE, 8 * _Settings.TILESIZE))
+            center = np.array(self.board.get_size()) / 2
+            for i in np.arange(64):
+                xy = np.array([i % 8, i // 8])
+                colour = (181, 136, 99) if np.sum(xy) % 2 == 0 else (240, 217, 181)
+                xy = xy - 3.5
+                xy[1] *= -1
+                xy = xy * _Settings.TILESIZE
+                xy = center + xy
+                topleft = xy - _Settings.TILESIZE / 2
+                pg.draw.rect(self.board, colour, pg.Rect(
+                    *topleft.astype(float),
+                    _Settings.TILESIZE, _Settings.TILESIZE
+                ))
+            self.board_rect = self.board.get_rect()
+            self.board_rect.center = (np.array(client.resolution) / 2).astype(float)
 
-        pg.display.flip()
+        def load_assets(self, client):
+            # load assets
+            self._load_pieces()
+            self._load_cards(client)
+            self._prerender_board(client)
+
+            # check load completion
+            if True:
+                self.finished_loading = True
+            else:
+                self.progress += 1

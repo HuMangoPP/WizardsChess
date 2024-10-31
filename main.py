@@ -1,8 +1,7 @@
 #!/usr/bin/env python
-import sys
-from src.game import Game
+from src.client import Client
+
 
 if __name__ == '__main__':
-    game = Game()
-    game.run()
-    sys.exit()
+    client = Client(use_mgl=False)
+    client.run()

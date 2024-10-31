@@ -2,6 +2,9 @@ from .game_state import *
 
 class Server:
     def __init__(self):
+        self.reset()
+    
+    def reset(self):
         self.board_manager = BoardManager()
         self.hand_manager = HandManager()
 
