@@ -31,6 +31,12 @@ class _Settings:
         overlay.fill((0, 0, 0))
         pg.draw.polygon(overlay, (10, 10, 10), points)
 
+    def get_xy(index: int):
+        xy = np.array([index % 8, index // 8]) # get xy
+        xy = xy - 8 / 2 + 1 / 2 # align pieces
+        xy = xy * _Settings.TILESIZE # scale
+        return xy
+
     GREY = (100, 100, 100)
     WHITE = (255, 255, 255)
     BLACK = (10, 10, 10)
@@ -138,16 +144,65 @@ class GameMenu(Menu):
         # menu setup
         self.card_rects = {1: [], -1: []}
 
+        self.animations = []
+        self.animation_time = 1
+
         # override
         self.goto = 'main'
     
+    def on_load(self, client):
+        super().on_load(client)
+        client.server.reset()
+    
+    def _animate(self, client):
+        if self.animation_time <= 0:
+            self.animation_time = 1
+            self.animations = self.animations[1:]
+        else:
+            self.animation_time -= client.dt
+
+    def _input(self, client):
+        # TODO client should not have server
+        for event in client.events:
+            if event.type == pg.KEYDOWN and event.key == pg.K_RETURN:
+                self.animations = client.server.end_turn()
+            if event.type == pg.MOUSEBUTTONDOWN:
+                if client.assets.board_rect.collidepoint(event.pos):
+                    xy = (np.array(event.pos) - np.array(client.assets.board_rect.topleft)) // _Settings.TILESIZE
+                    board_index = xy[0] + xy[1] * 8
+                    client.server.board_event(board_index)
+                    client.server.hand_event({
+                        'side': 0,
+                        'board_index': board_index
+                    })
+                
+                for i, card_rect in enumerate(self.card_rects[1]):
+                    if card_rect.collidepoint(event.pos):
+                        client.server.hand_event({
+                            'side': 1,
+                            'card_index': i
+                        })
+                
+                for i, card_rect in enumerate(self.card_rects[-1]):
+                    if card_rect.collidepoint(event.pos):
+                        client.server.hand_event({
+                            'side': -1,
+                            'card_index': i
+                        })
+
+    def update(self, client):
+        # menu update
+        if self.animations:
+            self._animate(client)
+        else:
+            self._input(client)
+
+        return super().update(client)
+
     def _render_piece_move_indices(self, display, piece_move_indices: np.ndarray):
         center = np.array(self.resolution) / 2
         for piece_move_index in piece_move_indices:
-            xy = np.array([piece_move_index % 8, piece_move_index // 8])
-            xy = xy - 3.5
-            xy = xy * _Settings.TILESIZE
-            xy = center + xy
+            xy = center + _Settings.get_xy(piece_move_index)
 
             pg.draw.circle(display, (255, 255, 255), xy.astype(float), _Settings.TILESIZE // 6)
 
@@ -165,10 +220,7 @@ class GameMenu(Menu):
             coloured_piece.blit(piece, (0, 0))
             coloured_piece.set_colorkey((0, 0, 0))
 
-            xy = np.array([i % 8, i // 8])
-            xy = xy - 3.5
-            xy = xy * _Settings.TILESIZE
-            xy = center + xy
+            xy = center + _Settings.get_xy(i)
             topleft = xy - np.array(coloured_piece.get_size()) * np.array([1/2, 4/5])
             display.blit(coloured_piece, topleft.astype(float))
 
@@ -202,41 +254,25 @@ class GameMenu(Menu):
 
             display.blit(card, card_rect)
     
-    def on_load(self, client):
-        super().on_load(client)
-        client.server.reset()
-    
-    def update(self, client):
-        # menu update
-        # TODO client should not have server
-        for event in client.events:
-            if event.type == pg.KEYDOWN and event.key == pg.K_RETURN:
-                client.server.end_turn()
-            if event.type == pg.MOUSEBUTTONDOWN:
-                if client.assets.board_rect.collidepoint(event.pos):
-                    xy = (np.array(event.pos) - np.array(client.assets.board_rect.topleft)) // _Settings.TILESIZE
-                    board_index = xy[0] + xy[1] * 8
-                    client.server.board_event(board_index)
-                    client.server.hand_event({
-                        'side': 0,
-                        'board_index': board_index
-                    })
-                
-                for i, card_rect in enumerate(self.card_rects[1]):
-                    if card_rect.collidepoint(event.pos):
-                        client.server.hand_event({
-                            'side': 1,
-                            'card_index': i
-                        })
-                
-                for i, card_rect in enumerate(self.card_rects[-1]):
-                    if card_rect.collidepoint(event.pos):
-                        client.server.hand_event({
-                            'side': -1,
-                            'card_index': i
-                        })
-
-        return super().update(client)
+    def _render_vfx(self, display: pg.Surface):
+        if self.animations:
+            center = np.array(self.resolution) / 2
+            animation = self.animations[0]
+            animation_type = animation[0]
+            if animation_type == 'cast_spell':
+                board_index, from_side = animation[1:]
+                xy = center + _Settings.get_xy(board_index)
+                anchor = center * np.array([1, from_side + 1])
+                pg.draw.line(display, (255,0,0), anchor, xy, 5)
+            elif animation_type == 'move_piece':
+                old_index, new_index = animation[1:]
+                old_xy = center + _Settings.get_xy(old_index)
+                new_xy = center + _Settings.get_xy(new_index)
+                pg.draw.line(display, (255,0,0), old_xy.astype(float), new_xy.astype(float), 10)
+            elif animation_type == 'spell_hit':
+                board_index = animation[1]
+                xy = center + _Settings.get_xy(board_index)
+                pg.draw.circle(display, (255,0,0), xy, 10, 2)
 
     def render(self, client):
         # menu render
@@ -260,5 +296,8 @@ class GameMenu(Menu):
             hands[1], hands[-1], 
             played_indices[1], played_indices[-1]
         )
+
+        # vfx
+        self._render_vfx(default)
         
         super().render(client)

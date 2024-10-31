@@ -575,10 +575,10 @@ class BoardManager:
         the board state will be updated as a result.
         """
         if self.picked_piece_index == -1:
-            return
+            return None
         
         if not self.picked_piece_params:
-            return
+            return None
         
         if self._validate_move():
             self.board_state, self.board_debuffs, self.en_passant, self.castling_privileges = _Settings.make_move_on_board(
@@ -590,14 +590,17 @@ class BoardManager:
                 self.en_passant,
                 self.castling_privileges
             )
+        animation = ['move_piece', self.picked_piece_index, self.picked_piece_params['move_to_index']]
 
         self.side_to_move *= -1
         self.picked_piece_index = -1
         self.picked_piece_params = {}
         self.piece_move_indices = []
         self._calculate_can_pickup_indices()
+        return animation
 
     def resolve_casts(self, played_cards: dict, speed: int):
+        animations = []
         for _, played_card_params in played_cards.items():
             if played_card_params['speed'] != speed:
                 continue
@@ -619,6 +622,8 @@ class BoardManager:
                 debuffs.update_debuffs(new_debuffs, 'displace')
             else:
                 debuffs.update_debuffs(new_debuffs, debuff_length)
+            animations.append(['cast_spell', target_index])
+        return animations
 
     def resolve_debuffs(self):
         destroy_tiles = np.hstack([
@@ -629,6 +634,7 @@ class BoardManager:
         [debuff.clear_debuffs() for debuff in self.board_debuffs]
 
         [debuff.end_round() for debuff in self.board_debuffs]
+        return [['spell_hit', tile] for tile in destroy_tiles]
 
     def get_render_data(self):
         return (

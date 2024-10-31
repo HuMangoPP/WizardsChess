@@ -19,7 +19,19 @@ class Server:
 
     def end_turn(self):
         played_cards = self.hand_manager.commit_play()
-        self.board_manager.resolve_casts(played_cards, 1)
-        self.board_manager.commit_play()
-        self.board_manager.resolve_casts(played_cards, 2)
-        self.board_manager.resolve_debuffs()
+        animations = []
+        cast_spell_animations = self.board_manager.resolve_casts(played_cards, 1)
+        animations.extend([
+            [*cast_spell_animation, -self.hand_manager.side_to_play] 
+            for cast_spell_animation in cast_spell_animations
+        ])
+        piece_move_animation = self.board_manager.commit_play()
+        if piece_move_animation is not None:
+            animations.append(piece_move_animation)
+        cast_spell_animations = self.board_manager.resolve_casts(played_cards, 2)
+        animations.extend([
+            [*cast_spell_animation, -self.hand_manager.side_to_play] 
+            for cast_spell_animation in cast_spell_animations
+        ])
+        animations.extend(self.board_manager.resolve_debuffs())
+        return animations
