@@ -1,0 +1,29 @@
+,display_name,speed,param_names,debuffs,debuff_length,description,r,g,b
+avada_kedavra,Avada Kedavra,2,target_index,death,0,Instantly kill an opponent piece. Killing the king is checkmate.,25,50,25
+accio,Accio,1,target_index,displace backward1,0,Instantly pull a piece one square towards you.,25,25,25
+depulso,Depulso,1,target_index,displace forward1,0,Instantly push a piece one square away from you.,25,25,25
+confundus,Confundus,1,target_index,displace random1,0,Instantly cause an opponent piece to move randomly to an empty adjacent square.,40,20,25
+deprimo,Deprimo,1,target_index,destroy,-1,"Instantly destroy an empty tile, so it cannot be occupied for the rest of the game.",25,40,25
+reducio,Reducio,2,target_index,shrink,3,Shrink a piece for 3 rounds. Shrunk pieces can move but cannot capture. Counter spell for engorgio.,35,20,35
+expelliarmus,Expelliarmus,0,target_index,none,0,Your opponents next spell will have no effect.,50,25,25
+disillusionment,Disillusionment,0,target_index,invisible,2,Target piece will become invisible for 2 rounds.,25,25,25
+engorgio,Engorgio,2,target_index,enlarge,3,Enlarge a piece for 3 rounds. Enlarged pieces cannot be captured. Counter spell for reducio.,20,25,40
+fiendfyre,Fiendfyre,2,target_index,dangerous2,3,Capture any piece as long as it is 2 squares away. This piece dies afterwards.,40,30,20
+finite_incantatem,Finite Incantatem,0,target_index,none,0,General counter spell. Remove all spell effect on a piece.,45,25,25
+flipendo,Flipendo,1,target_index,displace forward2,0,Instantly push a piece two squares away from you.,35,35,20
+immobulus,Immobulus,2,target_index,stationary,1,Target piece cannot move for the next 2 rounds.,25,25,50
+petrificus_totalus,Petrificus Totalus,2,target_index,stationary,2,Target piece cannot move for the next 3 rounds.,25,25,25
+fumos,Fumos,0,target_index,invisible,1,Target piece will be invisible for the next round.,20,20,20
+apparition,Apparition,0,target_index,displace anywhere,0,Instantly moves any piece on the board to any empty square.,25,25,25
+cruciatus,Cruciatus,2,target_index,stationary,-1,Target piece cannot move for the rest of the game.,50,25,25
+confringo,Confringo,2,target_index,dangerous1,3,Capture any piece so long as it is adjacent.,40,30,20
+impedimenta,Impedimenta,1,target_index,displace random2,0,Instantly cause an opponent piece to move randomly to an empty adjacent square.,20,35,35
+imperius,Imperius,2,target_index,control,3,Control the target piece for the next 3 rounds.,30,30,30
+locomotor,Locomotor,2,target_index,control,1,Control the target piece for the next round.,25,25,25
+legilimens,Legilimens,0,target_index,none,0,Reveal all cards in play.,25,25,25
+revelio,Revelio,0,target_index,none,0,Reveal your opponents entire hand.,40,40,25
+obscuro,Obscuro,0,target_index,none,0,Opponent cannot see you cast a spell.,25,25,25
+reparo,Reparo,1,target_index,repair,0,Repair a broken tile.,25,35,45
+prior_incantato,Prior Incantato,0,target_index,none,0,Use the last spell performed by either side.,40,35,20
+protego,Protego,1,target_index,shield,3,Shield a piece from the next spell. Lasts 3 rounds.,30,30,30
+stupefy,Stupefy,1,target_index,stationary,1,Target piece cannot move for the next round.,50,25,25
