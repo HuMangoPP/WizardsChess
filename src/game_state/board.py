@@ -402,7 +402,6 @@ class TileDebuffs:
                 possible_tiles_to_destroy = list(possible_tiles_to_destroy)
                 if len(possible_tiles_to_destroy) > 0:
                     destroy_tiles.append(np.random.choice(possible_tiles_to_destroy))
-        
         return destroy_tiles
 
     def clear_debuffs(self):
@@ -623,6 +622,7 @@ class BoardManager:
             else:
                 debuffs.update_debuffs(new_debuffs, debuff_length)
             animations.append(['cast_spell', target_index])
+        
         return animations
 
     def resolve_debuffs(self):

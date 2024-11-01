@@ -37,11 +37,14 @@ class _Settings:
         xy = xy * _Settings.TILESIZE # scale
         return xy
 
+    def lerp(u: np.ndarray, v: np.ndarray, t: float):
+        return u + (v - u) * t
+
     GREY = (100, 100, 100)
     WHITE = (255, 255, 255)
     BLACK = (10, 10, 10)
 
-    TILESIZE = 64
+    TILESIZE = 48
     COLOURS = dict()
 
 class Menu:
@@ -144,12 +147,18 @@ class GameMenu(Menu):
         # menu setup
         self.card_rects = {1: [], -1: []}
 
-        self.animations = []
-        self.animation_time = 1
+        self._setup_animations()
 
         # override
         self.goto = 'main'
     
+    def _setup_animations(self):
+        self.animations = []
+        self.animation_time = 1
+
+        from .vfx import Sparks
+        self.sparks = Sparks()
+
     def on_load(self, client):
         super().on_load(client)
         client.server.reset()
@@ -196,6 +205,7 @@ class GameMenu(Menu):
             self._animate(client)
         else:
             self._input(client)
+        self.sparks.update(client.dt)
 
         return super().update(client)
 
@@ -261,9 +271,13 @@ class GameMenu(Menu):
             animation_type = animation[0]
             if animation_type == 'cast_spell':
                 board_index, from_side = animation[1:]
-                xy = center + _Settings.get_xy(board_index)
+                destination = center + _Settings.get_xy(board_index)
                 anchor = center * np.array([1, from_side + 1])
-                pg.draw.line(display, (255,0,0), anchor, xy, 5)
+                xy = _Settings.lerp(anchor, destination, 1 - self.animation_time)
+                self.sparks.add_new_particles(
+                    np.array([xy]),
+                    2 * np.pi * np.random.rand(1)
+                )
             elif animation_type == 'move_piece':
                 old_index, new_index = animation[1:]
                 old_xy = center + _Settings.get_xy(old_index)
@@ -272,7 +286,11 @@ class GameMenu(Menu):
             elif animation_type == 'spell_hit':
                 board_index = animation[1]
                 xy = center + _Settings.get_xy(board_index)
-                pg.draw.circle(display, (255,0,0), xy, 10, 2)
+                self.sparks.add_new_particles(
+                    np.array([xy]),
+                    2 * np.pi * np.random.rand(1)
+                )
+        self.sparks.render(display)
 
     def render(self, client):
         # menu render

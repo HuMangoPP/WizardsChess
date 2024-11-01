@@ -10,7 +10,7 @@ class _Settings:
     MENU_MAP = dict(main=0, game=1)
     WINDOW_NAME = 'Wizard Chess'
 
-    TILESIZE = 64
+    TILESIZE = 48
     COLOURS = dict()
 
 
