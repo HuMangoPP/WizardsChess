@@ -18,8 +18,13 @@ class Server:
         self.board_manager.update_picked_piece_params(board_index)
 
     def end_turn(self):
+        # commit cards
         played_cards = self.hand_manager.commit_play()
+
+        # get animations
         animations = []
+
+        # resolve quickcasts
         cast_spell_animations = self.board_manager.resolve_casts(played_cards, 1)
         for animation in cast_spell_animations:
             animation_type = animation[0]
@@ -28,13 +33,20 @@ class Server:
             else:
                 animations.append(animation)
 
+        # move piece
         piece_move_animation = self.board_manager.commit_play()
         if piece_move_animation is not None:
             animations.append(piece_move_animation)
+
+        # resolve slow casts
         cast_spell_animations = self.board_manager.resolve_casts(played_cards, 2)
         animations.extend([
             [*cast_spell_animation, -self.hand_manager.side_to_play] 
             for cast_spell_animation in cast_spell_animations
         ])
-        animations.extend(self.board_manager.resolve_debuffs())
+
+        # tile effects
+        tile_effects = self.board_manager.resolve_debuffs()
+        if tile_effects is not None:
+            animations.append(tile_effects)
         return animations

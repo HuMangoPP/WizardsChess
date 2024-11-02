@@ -50,5 +50,5 @@ class Sparks:
                 [np.cos(angle + np.pi/2), np.sin(angle + np.pi/2)],
                 [np.cos(angle + np.pi), np.sin(angle + np.pi)],
                 [np.cos(angle - np.pi/2), np.sin(angle - np.pi/2)],
-            ]) * np.array([20,5,5,5]).reshape(-1,1)
+            ]) * np.array([20,5,10,5]).reshape(-1,1)
             pg.draw.polygon(display, (255,255,255), polygon)

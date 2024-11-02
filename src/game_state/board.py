@@ -631,11 +631,19 @@ class BoardManager:
             debuff.resolve_debuffs(self.board_state, i) 
             for i, debuff in enumerate(self.board_debuffs)
         ]).astype(int)
+        destroyed_pieces = self.board_state[destroy_tiles]
         self.board_state[destroy_tiles] = 0
         [debuff.clear_debuffs() for debuff in self.board_debuffs]
 
         [debuff.end_round() for debuff in self.board_debuffs]
-        return [['spell_hit', tile] for tile in destroy_tiles]
+        if destroy_tiles.size == 0:
+            return None
+        return [
+            'tile_effects', 
+            destroy_tiles, 
+            _Settings.PIECE_KEYS[np.abs(destroyed_pieces)],
+            _Settings.PIECE_COLOURS(destroyed_pieces)
+        ]
 
     def get_render_data(self):
         return (

@@ -220,16 +220,6 @@ class GameMenu(Menu):
         center = np.array(self.resolution) / 2
 
         for i, (piece_key, piece_colour) in enumerate(zip(piece_keys, piece_colours)):
-            if piece_key == 'none':
-                continue
-
-            piece = piece_assets[piece_key].copy()
-            piece.set_colorkey((0, 255, 0))
-            coloured_piece = pg.Surface(piece.get_size())
-            coloured_piece.fill((100, 0, 0)) if piece_colour else coloured_piece.fill((0, 0, 100))
-            coloured_piece.blit(piece, (0, 0))
-            coloured_piece.set_colorkey((0, 0, 0))
-
             xy = center + _Settings.get_xy(i)
             if self.animations:
                 animation = self.animations[0]
@@ -240,12 +230,35 @@ class GameMenu(Menu):
                         old_xy = center + _Settings.get_xy(old_index)
                         new_xy = center + _Settings.get_xy(new_index)
                         xy = _Settings.lerp(old_xy, new_xy, 1 - self.animation_time)
+                if animation_type == 'tile_effects':
+                    board_indices = animation[1]
+                    index = np.where(i == board_indices)[0]
+                    if index.size > 0:
+                        piece_key = animation[2][index[0]]
+                        piece_colour = animation[3][index[0]]
                 for animation in self.animations[1:]:
                     animation_type = animation[0]
                     if animation_type == 'move_piece':
                         old_index, new_index = animation[1:]
                         if i == new_index:
                             xy = center + _Settings.get_xy(old_index)
+                    if animation_type == 'tile_effects':
+                        board_indices = animation[1]
+                        index = np.where(i == board_indices)[0]
+                        if index.size > 0:
+                            piece_key = animation[2][index[0]]
+                            piece_colour = animation[3][index[0]]
+            
+            if piece_key == 'none':
+                continue
+
+            piece = piece_assets[piece_key].copy()
+            piece.set_colorkey((0, 255, 0))
+            coloured_piece = pg.Surface(piece.get_size())
+            coloured_piece.fill((100, 0, 0)) if piece_colour else coloured_piece.fill((0, 0, 100))
+            coloured_piece.blit(piece, (0, 0))
+            coloured_piece.set_colorkey((0, 0, 0))
+
             topleft = xy - np.array(coloured_piece.get_size()) * np.array([1/2, 4/5])
             display.blit(coloured_piece, topleft.astype(float))
 
@@ -293,12 +306,15 @@ class GameMenu(Menu):
                     np.array([xy]),
                     2 * np.pi * np.random.rand(1)
                 )
-            elif animation_type == 'spell_hit':
-                board_index = animation[1]
-                xy = center + _Settings.get_xy(board_index)
+            elif animation_type == 'tile_effects':
+                board_indices = animation[1]
+                xys = center + np.array([
+                    _Settings.get_xy(board_index)
+                    for board_index in board_indices
+                ])
                 self.sparks.add_new_particles(
-                    np.array([xy]),
-                    2 * np.pi * np.random.rand(1)
+                    xys,
+                    2 * np.pi * np.random.rand(xys.shape[0])
                 )
         self.sparks.render(display)
 
