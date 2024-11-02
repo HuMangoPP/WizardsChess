@@ -295,7 +295,7 @@ class _Settings:
                     new_piece_index >= 64 or
                     board_state[new_piece_index] != 0
                 ):
-                    return board_state, castling_privileges
+                    return board_state, board_debuffs, castling_privileges, new_piece_index
             new_board_state, new_board_debuffs, new_castling_privileges = _Settings.make_move_on_board_spell(
                 board_state,
                 board_debuffs,
@@ -312,12 +312,13 @@ class _Settings:
                     new_piece_index >= 64 or
                     board_state[new_piece_index] != 0
                 ):
-                    return board_state, castling_privileges
+                    return board_state, board_debuffs, castling_privileges, new_piece_index
+            new_index = target_index + side_to_move * 8 * displace_strength
             new_board_state, new_board_debuffs, new_castling_privileges = _Settings.make_move_on_board_spell(
                 board_state,
                 board_debuffs,
                 target_index,
-                target_index + side_to_move * 8 * displace_strength,
+                new_index,
                 castling_privileges
             )
         elif 'random' in displace_type:
@@ -328,26 +329,27 @@ class _Settings:
                     moves.remove(move)
             moves = list(moves)
             if len(moves) == 0:
-                move = target_index
+                new_index = target_index
             else:
-                move = np.random.choice(moves)
+                new_index = np.random.choice(moves)
             new_board_state, new_board_debuffs, new_castling_privileges = _Settings.make_move_on_board_spell(
                 board_state,
                 board_debuffs,
                 target_index,
-                move,
+                new_index,
                 castling_privileges
             )
         elif 'anywhere' in displace_type:
+            new_index = target_index
             new_board_state, new_board_debuffs, new_castling_privileges = _Settings.make_move_on_board_spell(
                 board_state,
                 board_debuffs,
                 target_index,
-                target_index + 0,
+                new_index,
                 castling_privileges
             )
         
-        return new_board_state, new_board_debuffs, new_castling_privileges
+        return new_board_state, new_board_debuffs, new_castling_privileges, new_index
     
     def calculate_n_steps_away(target_index: int, n_steps: int) -> set[int]:
         moves = set([target_index])
@@ -605,12 +607,13 @@ class BoardManager:
                 continue
             
             target_index = played_card_params['target_index']
+            animations.append(['cast_spell', target_index])
             debuffs = self.board_debuffs[target_index]
             new_debuffs = played_card_params['debuffs']
             debuff_length = played_card_params['debuff_length']
 
             if 'displace' in new_debuffs:
-                self.board_state, self.board_debuffs, self.castling_privileges = _Settings.displace_spell_effect(
+                self.board_state, self.board_debuffs, self.castling_privileges, displace_to = _Settings.displace_spell_effect(
                     self.board_state,
                     self.board_debuffs,
                     self.side_to_move,
@@ -618,10 +621,8 @@ class BoardManager:
                     target_index,
                     new_debuffs.split(' ')[-1]
                 )
-                debuffs.update_debuffs(new_debuffs, 'displace')
-            else:
-                debuffs.update_debuffs(new_debuffs, debuff_length)
-            animations.append(['cast_spell', target_index])
+                animations.append(['move_piece', target_index, displace_to])
+            debuffs.update_debuffs(new_debuffs, debuff_length)
         
         return animations
 

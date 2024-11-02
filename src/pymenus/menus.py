@@ -209,14 +209,14 @@ class GameMenu(Menu):
 
         return super().update(client)
 
-    def _render_piece_move_indices(self, display, piece_move_indices: np.ndarray):
+    def _render_piece_move_indices(self, display: pg.Surface, piece_move_indices: np.ndarray):
         center = np.array(self.resolution) / 2
         for piece_move_index in piece_move_indices:
             xy = center + _Settings.get_xy(piece_move_index)
 
             pg.draw.circle(display, (255, 255, 255), xy.astype(float), _Settings.TILESIZE // 6)
 
-    def _render_pieces(self, display, piece_assets: dict[str, pg.Surface], piece_keys: np.ndarray, piece_colours: np.ndarray):
+    def _render_pieces(self, display: pg.Surface, piece_assets: dict[str, pg.Surface], piece_keys: np.ndarray, piece_colours: np.ndarray):
         center = np.array(self.resolution) / 2
 
         for i, (piece_key, piece_colour) in enumerate(zip(piece_keys, piece_colours)):
@@ -231,12 +231,27 @@ class GameMenu(Menu):
             coloured_piece.set_colorkey((0, 0, 0))
 
             xy = center + _Settings.get_xy(i)
+            if self.animations:
+                animation = self.animations[0]
+                animation_type = animation[0]
+                if animation_type == 'move_piece':
+                    old_index, new_index = animation[1:]
+                    if i == new_index:
+                        old_xy = center + _Settings.get_xy(old_index)
+                        new_xy = center + _Settings.get_xy(new_index)
+                        xy = _Settings.lerp(old_xy, new_xy, 1 - self.animation_time)
+                for animation in self.animations[1:]:
+                    animation_type = animation[0]
+                    if animation_type == 'move_piece':
+                        old_index, new_index = animation[1:]
+                        if i == new_index:
+                            xy = center + _Settings.get_xy(old_index)
             topleft = xy - np.array(coloured_piece.get_size()) * np.array([1/2, 4/5])
             display.blit(coloured_piece, topleft.astype(float))
 
     def _render_hands(
         self, 
-        display,
+        display: pg.Surface,
         card_assets: dict[str, pg.Surface],
         my_hand: np.ndarray, 
         opponent_hand: np.ndarray, 
@@ -278,11 +293,6 @@ class GameMenu(Menu):
                     np.array([xy]),
                     2 * np.pi * np.random.rand(1)
                 )
-            elif animation_type == 'move_piece':
-                old_index, new_index = animation[1:]
-                old_xy = center + _Settings.get_xy(old_index)
-                new_xy = center + _Settings.get_xy(new_index)
-                pg.draw.line(display, (255,0,0), old_xy.astype(float), new_xy.astype(float), 10)
             elif animation_type == 'spell_hit':
                 board_index = animation[1]
                 xy = center + _Settings.get_xy(board_index)

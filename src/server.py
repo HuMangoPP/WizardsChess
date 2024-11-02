@@ -21,10 +21,13 @@ class Server:
         played_cards = self.hand_manager.commit_play()
         animations = []
         cast_spell_animations = self.board_manager.resolve_casts(played_cards, 1)
-        animations.extend([
-            [*cast_spell_animation, -self.hand_manager.side_to_play] 
-            for cast_spell_animation in cast_spell_animations
-        ])
+        for animation in cast_spell_animations:
+            animation_type = animation[0]
+            if animation_type == 'cast_spell':
+                animations.append([*animation, -self.hand_manager.side_to_play])
+            else:
+                animations.append(animation)
+
         piece_move_animation = self.board_manager.commit_play()
         if piece_move_animation is not None:
             animations.append(piece_move_animation)
