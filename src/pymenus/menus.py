@@ -298,13 +298,14 @@ class GameMenu(Menu):
             animation = self.animations[0]
             animation_type = animation[0]
             if animation_type == 'cast_spell':
-                board_index, from_side = animation[1:]
+                color, board_index, from_side = animation[1:]
                 destination = center + _Settings.get_xy(board_index)
                 anchor = center * np.array([1, from_side + 1])
                 xy = _Settings.lerp(anchor, destination, 1 - self.animation_time)
                 self.sparks.add_new_particles(
                     np.array([xy]),
-                    2 * np.pi * np.random.rand(1)
+                    2 * np.pi * np.random.rand(1),
+                    np.array([color])
                 )
             elif animation_type == 'tile_effects':
                 board_indices = animation[1]
@@ -314,7 +315,8 @@ class GameMenu(Menu):
                 ])
                 self.sparks.add_new_particles(
                     xys,
-                    2 * np.pi * np.random.rand(xys.shape[0])
+                    2 * np.pi * np.random.rand(xys.shape[0]),
+                    np.full((xys.shape[0],3), (255,255,255))
                 )
         self.sparks.render(display)
 

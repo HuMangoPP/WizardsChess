@@ -66,7 +66,8 @@ class _Hand:
                 **played_card_params,
                 'speed': _Settings.CARD_DATA.loc[played_card_id, 'speed'],
                 'debuffs': _Settings.CARD_DATA.loc[played_card_id, 'debuffs'],
-                'debuff_length': _Settings.CARD_DATA.loc[played_card_id, 'debuff_length']
+                'debuff_length': _Settings.CARD_DATA.loc[played_card_id, 'debuff_length'],
+                'color': _Settings.CARD_DATA.loc[played_card_id, ['r', 'g', 'b']].to_numpy()
             }
             for played_card_id, played_card_params in played_cards.items()
         }

@@ -607,7 +607,7 @@ class BoardManager:
                 continue
             
             target_index = played_card_params['target_index']
-            animations.append(['cast_spell', target_index])
+            animations.append(['cast_spell', played_card_params['color'], target_index])
             debuffs = self.board_debuffs[target_index]
             new_debuffs = played_card_params['debuffs']
             debuff_length = played_card_params['debuff_length']
