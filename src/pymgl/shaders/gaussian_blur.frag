@@ -26,28 +26,28 @@ void main() {
     // horizontal
     for (int i = 1; i < KERNEL_SIZE; i++) {
         vec3 color = vec3(texture(tex, uvs + vec2(tex_offset.x * i, 0.)).rgb);
-        finalColor += color * weights[i];
         if (color != vec3(0)) {
             alpha += weights[i];
+            finalColor += color * weights[i];
         }
         color = vec3(texture(tex, uvs - vec2(tex_offset.x * i, 0.)).rgb);
         if (color != vec3(0)) {
             alpha += weights[i];
+            finalColor += color * weights[i];
         }
-        finalColor += color * weights[i];
     }
     // vertical
     for (int i = 1; i < KERNEL_SIZE; i++) {
         vec3 color = vec3(texture(tex, uvs + vec2(0., tex_offset.y * i)).rgb);
         if (color != vec3(0)) {
             alpha += weights[i];
+            finalColor += color * weights[i];
         }
-        finalColor += color * weights[i];
         color = vec3(texture(tex, uvs - vec2(0., tex_offset.y * i)).rgb);
         if (color != vec3(0)) {
             alpha += weights[i];
+            finalColor += color * weights[i];
         }
-        finalColor += color * weights[i];
     }
 
     if (alpha > 0) {
