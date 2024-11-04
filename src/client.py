@@ -15,7 +15,7 @@ class _Settings:
 
 
 class Client:
-    def __init__(self, use_mgl: bool = True):
+    def __init__(self, use_mgl: bool = False):
         self.use_mgl = use_mgl
         self._pg_init()
         self.assets = self.Assets('./assets', self.resolution)
@@ -39,21 +39,28 @@ class Client:
             )
 
             # get graphics engine, font, and displays
-            self.graphics_engine = GraphicsEngine(self.ctx, self.resolution, './src')         
+            self.graphics_engine = GraphicsEngine(self.ctx, self.resolution, './src')
+
+            # create displays
+            self.displays = dict(
+                default=pg.Surface(self.resolution),
+                gaussian_blur=pg.Surface(self.resolution),
+                overlay=pg.Surface(self.resolution)
+            )
         else:
+            # get window
             self.window = pg.display.set_mode(self.resolution, pg.DOUBLEBUF)
+
+            # create displays
+            self.displays = dict(
+                default=pg.Surface(self.resolution),
+                overlay=pg.Surface(self.resolution)
+            )
+            self.displays['overlay'].set_colorkey((0, 0, 0))
         
         # font
         from .pyfont import Font
         self.font = Font(pg.image.load('./src/pyfont/font.png').convert())
-        
-        # create displays
-        self.displays = dict(
-            default=pg.Surface(self.resolution),
-            overlay=pg.Surface(self.resolution)
-        )
-        if not self.use_mgl:
-            self.displays['overlay'].set_colorkey((0, 0, 0))
 
         # window title
         pg.display.set_caption(_Settings.WINDOW_NAME)

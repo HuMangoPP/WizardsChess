@@ -3,8 +3,9 @@ import pygame as pg
 
 
 class _Settings:
-    LIFETIME = 1/2
+    LIFETIME = 1 / 2
     SPEED = 100
+    KITE = 8 / LIFETIME * np.array([4,1,2,1]).reshape(-1,1)
 
 
 class Sparks:
@@ -50,5 +51,5 @@ class Sparks:
                 [np.cos(angle + np.pi/2), np.sin(angle + np.pi/2)],
                 [np.cos(angle + np.pi), np.sin(angle + np.pi)],
                 [np.cos(angle - np.pi/2), np.sin(angle - np.pi/2)],
-            ]) * np.array([20,5,10,5]).reshape(-1,1)
-            pg.draw.polygon(display, (255,255,255), polygon)
+            ]) * lifetime * _Settings.KITE
+            pg.draw.polygon(display, (255,0,0), polygon)

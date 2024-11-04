@@ -321,6 +321,7 @@ class GameMenu(Menu):
     def render(self, client):
         # menu render
         default = client.displays['default']
+        effects = client.displays['gaussian_blur']
 
         # render the board
         default.blit(client.assets.board, client.assets.board_rect)
@@ -342,6 +343,6 @@ class GameMenu(Menu):
         )
 
         # vfx
-        self._render_vfx(default)
+        self._render_vfx(effects)
         
         super().render(client)
