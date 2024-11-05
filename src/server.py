@@ -8,6 +8,13 @@ class Server:
         self.board_manager = BoardManager()
         self.hand_manager = HandManager()
 
+    def validate_code(self, code: str, lobby_type: str):
+        if lobby_type == 'create':
+            ...
+        else:
+            ...
+        return True
+
     def hand_event(self, event_data: dict):
         self.hand_manager.pick_card(event_data)
         self.hand_manager.update_picked_card_params(event_data)  

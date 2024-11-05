@@ -172,16 +172,17 @@ class LobbyMenu(Menu):
         self.goto = 'game'
     
     def _setup_boxes(self):
-        num_boxes = 6
+        self.code_length = 6
+        offset = self.code_length / 2 + 1 /2
         boxsize = 50
         margin = 10
         self.code = ''
         self.boxes = [
             pg.Rect(
-                self.resolution[0] / 2 + (boxsize + margin) * (i - num_boxes / 2 + 1 /2) - boxsize / 2,
+                self.resolution[0] / 2 + (boxsize + margin) * (i - offset) - boxsize / 2,
                 self.resolution[1] / 2 - boxsize / 2,
                 boxsize, boxsize
-            ) for i in np.arange(num_boxes)
+            ) for i in np.arange(self.code_length)
         ]
 
     def on_load(self, client):
@@ -198,7 +199,11 @@ class LobbyMenu(Menu):
             if event.type == pg.KEYDOWN:
                 if event.key == pg.K_BACKSPACE:
                     self.code = self.code[:-1]
-                if event.key == pg.K_RETURN:
+                if (
+                    event.key == pg.K_RETURN and
+                    len(self.code) == self.code_length and
+                    client.server.validate_code(self.code, self.lobby_type)
+                ):
                     self.transition_phase = 1
                     self.transition_time = 0
 
