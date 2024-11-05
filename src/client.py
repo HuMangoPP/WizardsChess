@@ -7,7 +7,7 @@ from .pymenus import *
 
 class _Settings:
     RESOLUTION = (1280, 720)
-    MENU_MAP = dict(main=0, game=1)
+    MENU_MAP = dict(main=0, game=1, lobby=2)
     WINDOW_NAME = 'Wizard Chess'
 
     TILESIZE = 48
@@ -76,13 +76,17 @@ class Client:
         # menus
         self.menus : list[Menu] = [
             MainMenu(self),
-            GameMenu(self)
+            GameMenu(self),
+            LobbyMenu(self)
         ]
         self.current_menu = 0
     
     def _setup_server(self):
         from .server import Server
         self.server = Server()
+
+    def _get_lobby_type(self):
+        return self.menus[0].lobby_type
 
     def update(self):
         # quit client

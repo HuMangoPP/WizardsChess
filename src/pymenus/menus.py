@@ -106,11 +106,17 @@ class MainMenu(Menu):
         self._setup_buttons()
 
         # override
-        self.goto = 'game'
+        self.goto = 'lobby'
     
     def _setup_buttons(self):
-        self.start_button = pg.Rect(0, 0, 200, 50)
-        self.start_button.center = np.array(self.resolution) / 2
+        # bottons
+        self.create_lobby_button = pg.Rect(0, 0, 200, 50)
+        self.join_lobby_button = pg.Rect(0, 0, 200, 50)
+        self.create_lobby_button.center = np.array(self.resolution) * np.array([1/2,4/9])
+        self.join_lobby_button.center = np.array(self.resolution) * np.array([1/2,5/9])
+        
+        # lobby
+        self.lobby_type = 'create'
     
     def on_load(self, client):
         super().on_load(client)
@@ -118,24 +124,112 @@ class MainMenu(Menu):
     def update(self, client):
         # menu update
         for event in client.events:
-            if event.type == pg.MOUSEBUTTONDOWN and self.start_button.collidepoint(event.pos):
-                self.transition_phase = 1
-                self.transition_time = 0
+            if event.type == pg.MOUSEBUTTONDOWN:
+                if self.create_lobby_button.collidepoint(event.pos):
+                    self.lobby_type = 'create'
+                    self.transition_phase = 1
+                    self.transition_time = 0
+                if self.join_lobby_button.collidepoint(event.pos):
+                    self.lobby_type = 'join'
+                    self.transition_phase = 1
+                    self.transition_time = 0
+            
+        return super().update(client)
+
+    def render(self, client):
+        # menu render
+        default = client.displays['default']
+        pg.draw.rect(default, _Settings.GREY, self.create_lobby_button)
+        client.font.render(
+            default, 
+            'create lobby', 
+            self.create_lobby_button.center,
+            _Settings.WHITE,
+            12,
+            style='center'
+        )
+        pg.draw.rect(default, _Settings.GREY, self.join_lobby_button)
+        client.font.render(
+            default, 
+            'join lobby', 
+            self.join_lobby_button.center,
+            _Settings.WHITE,
+            12,
+            style='center'
+        )
+        
+        super().render(client)
+
+
+class LobbyMenu(Menu):
+    def __init__(self, client):
+        super().__init__(client)
+
+        # menu setup
+        self._setup_boxes()
+
+        # override
+        self.goto = 'game'
+    
+    def _setup_boxes(self):
+        num_boxes = 6
+        boxsize = 50
+        margin = 10
+        self.code = ''
+        self.boxes = [
+            pg.Rect(
+                self.resolution[0] / 2 + (boxsize + margin) * (i - num_boxes / 2 + 1 /2) - boxsize / 2,
+                self.resolution[1] / 2 - boxsize / 2,
+                boxsize, boxsize
+            ) for i in np.arange(num_boxes)
+        ]
+
+    def on_load(self, client):
+        super().on_load(client)
+
+        self.lobby_type = client._get_lobby_type()
+    
+    def update(self, client):
+        # menu update
+        for event in client.events:
+            if event.type == pg.TEXTINPUT:
+                if len(self.code) < 6:
+                    self.code = f'{self.code}{event.text.lower()}'
+            if event.type == pg.KEYDOWN:
+                if event.key == pg.K_BACKSPACE:
+                    self.code = self.code[:-1]
+                if event.key == pg.K_RETURN:
+                    self.transition_phase = 1
+                    self.transition_time = 0
 
         return super().update(client)
 
     def render(self, client):
         # menu render
         default = client.displays['default']
-        pg.draw.rect(default, _Settings.GREY, self.start_button)
+
+        # top text
         client.font.render(
-            default, 
-            'start', 
-            self.start_button.center,
+            default,
+            f'{self.lobby_type} lobby',
+            np.array(self.resolution) * np.array([1/2, 1/5]),
             _Settings.WHITE,
-            20,
+            50,
             style='center'
         )
+
+        # boxes
+        for i, box in enumerate(self.boxes):
+            pg.draw.rect(default, _Settings.GREY, box)
+            if len(self.code) > i:
+                client.font.render(
+                    default,
+                    self.code[i],
+                    box.center,
+                    _Settings.WHITE,
+                    40,
+                    style='center'
+                )
         
         super().render(client)
 
