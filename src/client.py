@@ -88,6 +88,9 @@ class Client:
     def _get_lobby_type(self):
         return self.menus[0].lobby_type
 
+    def _get_game_id(self):
+        return self.menus[2].code
+
     def update(self):
         # quit client
         for event in self.events:

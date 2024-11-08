@@ -248,6 +248,8 @@ class GameMenu(Menu):
 
         self._setup_animations()
 
+        self.code = None
+
         # override
         self.goto = 'main'
     
@@ -260,7 +262,8 @@ class GameMenu(Menu):
 
     def on_load(self, client):
         super().on_load(client)
-        client.server.reset()
+        
+        self.code = client._get_game_id()
     
     def _animate(self, client):
         if self.animation_time <= 0:

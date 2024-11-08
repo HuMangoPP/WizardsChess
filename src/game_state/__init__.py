@@ -1,2 +1,1 @@
-from .board import *
-from .hand import *
+from .game_instance import *
