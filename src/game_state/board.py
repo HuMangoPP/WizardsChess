@@ -425,19 +425,28 @@ class TileDebuffs:
 
 class BoardManager:
     def __init__(self):
+        # board state
         self.board_state = []
         self.castling_privileges = []
         self.side_to_move = 1
         self.en_passant = -1
         self._init_from_string()
 
+        # debuffs
         self.board_debuffs = np.full(64, TileDebuffs(), object)
     
+        # player inputs
         self.picked_piece_index = -1
         self.picked_piece_params = {}
         self.can_pickup_indices = []
         self.piece_move_indices = []
         self._calculate_can_pickup_indices()
+
+        # card draws
+        self.chain_data = {
+            1: [],
+            -1: []
+        }
 
     def _init_from_string(self, position: str = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR 1 1111 -1'):
         """
@@ -582,15 +591,29 @@ class BoardManager:
             return None
         
         if self._validate_move():
+            move_to_index = self.picked_piece_params['move_to_index']
             self.board_state, self.board_debuffs, self.en_passant, self.castling_privileges = _Settings.make_move_on_board(
                 self.board_state,
                 self.board_debuffs,
                 self.picked_piece_index,
-                self.picked_piece_params['move_to_index'],
+                move_to_index,
                 self.side_to_move,
                 self.en_passant,
                 self.castling_privileges
             )
+            chain = self.chain_data[self.side_to_move]
+            if chain:
+                if chain[-1] == self.picked_piece_index:
+                    if move_to_index in chain:
+                        index = chain.index(move_to_index)
+                        chain_length = len(chain) - index
+                        self.chain_data[self.side_to_move] = []
+                    else:
+                        chain.append(move_to_index)
+                else:
+                    self.chain_data[self.side_to_move] = []
+            else:
+                self.chain_data[self.side_to_move] = [self.picked_piece_index, move_to_index]
         animation = ['move_piece', self.picked_piece_index, self.picked_piece_params['move_to_index']]
 
         self.side_to_move *= -1
