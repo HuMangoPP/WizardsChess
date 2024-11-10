@@ -19,4 +19,10 @@ class Server:
         self.games[code].board_event(board_index)
 
     def end_turn(self, code: str):
-        self.games[code].end_turn()
+        return self.games[code].end_turn()
+    
+    def get_render_data(self, code: str):
+        return dict(
+            board=self.games[code].board_manager.get_render_data(),
+            hand=self.games[code].hand_manager.get_render_data()
+        )

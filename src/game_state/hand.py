@@ -13,6 +13,9 @@ class _Hand:
         self.picked_card_index = -1
         self.picked_card_params = {}
     
+    def new_card(self, card_id: str):
+        self.cards = np.hstack([self.cards, card_id])
+
     def pick_card(self, card_index: int):
         """
         this function is called whenever a player picks a card from their hand. 
@@ -94,6 +97,16 @@ class HandManager:
         }
         self.side_to_play = 1
     
+    def draw_card(self, level: int):
+        weights = _Settings.CARD_DATA.loc[_Settings.CARD_DATA['rarity'] <= level, 'rarity'].to_numpy()
+        possible_draws = _Settings.CARD_DATA.index[_Settings.CARD_DATA['rarity'] <= level].to_numpy()
+
+        if possible_draws.size > 0:
+            cutoffs = np.cumsum(weights / np.sum(weights))
+            rand = np.random.rand()
+            index = np.min(np.where(cutoffs > rand)[0])
+            self.hands[-self.side_to_play].new_card(possible_draws[index])
+
     def pick_card(self, event_data: dict):
         if event_data['side'] != self.side_to_play:
             return

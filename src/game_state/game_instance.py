@@ -33,7 +33,7 @@ class GameInstance:
                 animations.append(animation)
 
         # move piece
-        piece_move_animation = self.board_manager.commit_play()
+        piece_move_animation, chain_length = self.board_manager.commit_play()
         if piece_move_animation is not None:
             animations.append(piece_move_animation)
 
@@ -48,4 +48,6 @@ class GameInstance:
         tile_effects = self.board_manager.resolve_debuffs()
         if tile_effects is not None:
             animations.append(tile_effects)
+        
+        self.hand_manager.draw_card(chain_length)
         return animations

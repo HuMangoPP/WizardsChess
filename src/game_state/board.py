@@ -585,11 +585,13 @@ class BoardManager:
         the board state will be updated as a result.
         """
         if self.picked_piece_index == -1:
-            return None
+            return None, 0
         
         if not self.picked_piece_params:
-            return None
+            return None, 0
         
+        animation = None
+        chain_length = 0
         if self._validate_move():
             move_to_index = self.picked_piece_params['move_to_index']
             self.board_state, self.board_debuffs, self.en_passant, self.castling_privileges = _Settings.make_move_on_board(
@@ -601,6 +603,7 @@ class BoardManager:
                 self.en_passant,
                 self.castling_privileges
             )
+            animation = ['move_piece', self.picked_piece_index, self.picked_piece_params['move_to_index']]
             chain = self.chain_data[self.side_to_move]
             if chain:
                 if chain[-1] == self.picked_piece_index:
@@ -611,17 +614,16 @@ class BoardManager:
                     else:
                         chain.append(move_to_index)
                 else:
-                    self.chain_data[self.side_to_move] = []
+                    self.chain_data[self.side_to_move] = [self.picked_piece_index, move_to_index]
             else:
                 self.chain_data[self.side_to_move] = [self.picked_piece_index, move_to_index]
-        animation = ['move_piece', self.picked_piece_index, self.picked_piece_params['move_to_index']]
 
         self.side_to_move *= -1
         self.picked_piece_index = -1
         self.picked_piece_params = {}
         self.piece_move_indices = []
         self._calculate_can_pickup_indices()
-        return animation
+        return animation, chain_length
 
     def resolve_casts(self, played_cards: dict, speed: int):
         animations = []
