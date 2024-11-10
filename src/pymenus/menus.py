@@ -276,27 +276,27 @@ class GameMenu(Menu):
         # TODO client should not have server
         for event in client.events:
             if event.type == pg.KEYDOWN and event.key == pg.K_RETURN:
-                self.animations = client.server.end_turn()
+                self.animations = client.server.end_turn(self.code)
             if event.type == pg.MOUSEBUTTONDOWN:
                 if client.assets.board_rect.collidepoint(event.pos):
                     xy = (np.array(event.pos) - np.array(client.assets.board_rect.topleft)) // _Settings.TILESIZE
                     board_index = xy[0] + xy[1] * 8
-                    client.server.board_event(board_index)
-                    client.server.hand_event({
+                    client.server.board_event(self.code, board_index)
+                    client.server.hand_event(self.code, {
                         'side': 0,
                         'board_index': board_index
                     })
                 
                 for i, card_rect in enumerate(self.card_rects[1]):
                     if card_rect.collidepoint(event.pos):
-                        client.server.hand_event({
+                        client.server.hand_event(self.code, {
                             'side': 1,
                             'card_index': i
                         })
                 
                 for i, card_rect in enumerate(self.card_rects[-1]):
                     if card_rect.collidepoint(event.pos):
-                        client.server.hand_event({
+                        client.server.hand_event(self.code, {
                             'side': -1,
                             'card_index': i
                         })
@@ -431,14 +431,15 @@ class GameMenu(Menu):
         default.blit(client.assets.board, client.assets.board_rect)
 
         # TODO client should not have server
+        render_data = client.server.get_render_data(self.code)
 
         # render pieces
-        piece_keys, piece_colours, piece_move_indices = client.server.board_manager.get_render_data()
+        piece_keys, piece_colours, piece_move_indices = render_data['board']
         self._render_pieces(default, client.assets.pieces, piece_keys, piece_colours)
         self._render_piece_move_indices(default, piece_move_indices)
 
         # render hand
-        hands, played_indices = client.server.hand_manager.get_render_data()
+        hands, played_indices = render_data['hand']
         self._render_hands(
             default, 
             client.assets.cards, 
