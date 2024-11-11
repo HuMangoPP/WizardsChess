@@ -318,38 +318,55 @@ class GameMenu(Menu):
 
             pg.draw.circle(display, (255, 255, 255), xy.astype(float), _Settings.TILESIZE // 6)
 
-    def _render_pieces(self, display: pg.Surface, piece_assets: dict[str, pg.Surface], piece_keys: np.ndarray, piece_colours: np.ndarray):
+    def _render_pieces(
+        self, display: pg.Surface, piece_assets: dict[str, pg.Surface], 
+        old_keys: np.ndarray, old_colors: np.ndarray,
+        new_keys: np.ndarray, new_colors: np.ndarray
+    ):
         center = np.array(self.resolution) / 2
 
-        for i, (piece_key, piece_colour) in enumerate(zip(piece_keys, piece_colours)):
+        for i in np.arange(64):
+            piece_key = new_keys[i]
+            piece_colour = new_colors[i]
+
             xy = center + _Settings.get_xy(i)
+            alpha = 1
             if self.animations:
                 animation = self.animations[0]
                 animation_type = animation[0]
                 if animation_type == 'move_piece':
                     old_index, new_index = animation[1:]
-                    if i == new_index:
+                    if i == old_index:
                         old_xy = center + _Settings.get_xy(old_index)
                         new_xy = center + _Settings.get_xy(new_index)
-                        xy = _Settings.lerp(old_xy, new_xy, 1 - self.animation_time)
-                if animation_type == 'tile_effects':
+                        xy = _Settings.lerp(new_xy, old_xy, self.animation_time)
+                        piece_key = old_keys[i]
+                        piece_colour = old_colors[i]
+                        alpha = 1
+                    elif i == new_index:
+                        piece_key = old_keys[i]
+                        piece_colour = old_colors[i]
+                        alpha = _Settings.lerp(0, 1, self.animation_time)
+                elif animation_type == 'tile_effects':
                     board_indices = animation[1]
-                    index = np.where(i == board_indices)[0]
-                    if index.size > 0:
-                        piece_key = animation[2][index[0]]
-                        piece_colour = animation[3][index[0]]
+                    if i in board_indices:
+                        alpha = _Settings.lerp(0, 1, self.animation_time)
+                        piece_key = old_keys[i]
+                        piece_colour = old_colors[i]
+                    
                 for animation in self.animations[1:]:
                     animation_type = animation[0]
                     if animation_type == 'move_piece':
-                        old_index, new_index = animation[1:]
-                        if i == new_index:
-                            xy = center + _Settings.get_xy(old_index)
+                        if i in animation[1:]:
+                            piece_key = old_keys[i]
+                            piece_colour = old_colors[i]
+                            alpha = 1
                     if animation_type == 'tile_effects':
                         board_indices = animation[1]
-                        index = np.where(i == board_indices)[0]
-                        if index.size > 0:
-                            piece_key = animation[2][index[0]]
-                            piece_colour = animation[3][index[0]]
+                        if i in board_indices:
+                            piece_key = old_keys[i]
+                            piece_colour = old_colors[i]
+                            alpha = 1
             
             if piece_key == 'none':
                 continue
@@ -360,6 +377,7 @@ class GameMenu(Menu):
             coloured_piece.fill((100, 0, 0)) if piece_colour else coloured_piece.fill((0, 0, 100))
             coloured_piece.blit(piece, (0, 0))
             coloured_piece.set_colorkey((0, 0, 0))
+            coloured_piece.set_alpha(int(alpha * 255))
 
             topleft = xy - np.array(coloured_piece.get_size()) * np.array([1/2, 4/5])
             display.blit(coloured_piece, topleft.astype(float))
@@ -434,9 +452,12 @@ class GameMenu(Menu):
         render_data = client.server.get_render_data(self.code)
 
         # render pieces
-        piece_keys, piece_colours, piece_move_indices = render_data['board']
-        self._render_pieces(default, client.assets.pieces, piece_keys, piece_colours)
-        self._render_piece_move_indices(default, piece_move_indices)
+        self._render_pieces(
+            default, client.assets.pieces, 
+            render_data['board']['old_keys'], render_data['board']['old_colors'],
+            render_data['board']['new_keys'], render_data['board']['new_colors']
+        )
+        self._render_piece_move_indices(default, render_data['board']['move_indices'])
 
         # render hand
         hands, played_indices = render_data['hand']

@@ -427,6 +427,7 @@ class BoardManager:
     def __init__(self):
         # board state
         self.board_state = []
+        self.prev_board_state = []
         self.castling_privileges = []
         self.side_to_move = 1
         self.en_passant = -1
@@ -478,6 +479,7 @@ class BoardManager:
             else:
                 self.board_state[index] = _Settings.PIECE_MAP[c.lower()] * _Settings.SIDE_MAP(c)
                 index += 1
+        self.prev_board_state = self.board_state.copy()
 
         self.side_to_move = int(side_to_move)
 
@@ -594,6 +596,7 @@ class BoardManager:
         chain_length = 0
         if self._validate_move():
             move_to_index = self.picked_piece_params['move_to_index']
+            self.prev_board_state = self.board_state.copy()
             self.board_state, self.board_debuffs, self.en_passant, self.castling_privileges = _Settings.make_move_on_board(
                 self.board_state,
                 self.board_debuffs,
@@ -665,15 +668,15 @@ class BoardManager:
             return None
         return [
             'tile_effects', 
-            destroy_tiles, 
-            _Settings.PIECE_KEYS[np.abs(destroyed_pieces)],
-            _Settings.PIECE_COLOURS(destroyed_pieces)
+            destroy_tiles
         ]
 
     def get_render_data(self):
-        return (
-            _Settings.PIECE_KEYS[np.abs(self.board_state)], 
-            _Settings.PIECE_COLOURS(self.board_state),
-            self.piece_move_indices
+        return dict(
+            old_keys=_Settings.PIECE_KEYS[np.abs(self.prev_board_state)],
+            old_colors=_Settings.PIECE_COLOURS(self.prev_board_state),
+            new_keys=_Settings.PIECE_KEYS[np.abs(self.board_state)],
+            new_colors=_Settings.PIECE_COLOURS(self.board_state),
+            move_indices=self.piece_move_indices
         )
 
